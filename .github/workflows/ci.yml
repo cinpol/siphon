@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint-test:
+    name: Lint & test (mock)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Check formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt-formatted:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
+
+  build-native:
+    name: Build native (goceph)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # The real (cluster-capable) build links librados/librbd via cgo, so the
+      # Ceph client development headers must be present. This job doesn't need a
+      # cluster — it only compile-checks that the native transport still builds.
+      - name: Install Ceph client libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y librados-dev librbd-dev
+
+      - name: Build (goceph tag)
+        run: go build -tags goceph ./...

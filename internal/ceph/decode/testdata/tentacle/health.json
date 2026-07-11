@@ -1,0 +1,2 @@
+
+{"status":"HEALTH_WARN","checks":{"MON_DISK_LOW":{"severity":"HEALTH_WARN","summary":{"message":"mon ceph-mon-01 is low on available space","count":1},"detail":[{"message":"mon.ceph-mon-01 has 27% avail"}],"muted":false}},"mutes":[]}

@@ -1,0 +1,19 @@
+Argonaut
+Copyright 2026 The Argonaut Authors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Argonaut links, when built with the `goceph` tag, against the Ceph client
+libraries (librados, librbd), which are licensed under LGPL-2.1. These libraries
+are dynamically linked and are not distributed as part of Argonaut's source.
+
+This product includes the following third-party Go modules:
+
+  - github.com/ceph/go-ceph            (MIT License)
+  - github.com/charmbracelet/bubbletea (MIT License)
+  - github.com/charmbracelet/bubbles   (MIT License)
+  - github.com/charmbracelet/lipgloss  (MIT License)
+  - github.com/charmbracelet/x/ansi    (MIT License)
+  - gopkg.in/yaml.v3                    (MIT / Apache-2.0)
+
+See each module's repository for its full license text.

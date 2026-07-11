@@ -1,0 +1,189 @@
+// Package views renders individual screens of the TUI.
+//
+// A view is a pure function from domain state to a string. Keeping rendering
+// free of side effects and cluster access makes screens easy to reason about
+// and test, and keeps all I/O in the transport/service layers.
+package views
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/charmbracelet/lipgloss"
+
+	"github.com/cinpol/argonaut/internal/model"
+	"github.com/cinpol/argonaut/internal/ui/components"
+	"github.com/cinpol/argonaut/internal/ui/format"
+	"github.com/cinpol/argonaut/internal/ui/styles"
+)
+
+// minTwoColWidth is the terminal width below which the grid collapses to a
+// single column so panels stay readable on narrow terminals.
+const minTwoColWidth = 64
+
+// panelInnerHeight is the shared content height (excluding border/title) for
+// the top grid panels, so a row of panels aligns cleanly.
+const panelInnerHeight = 3
+
+// Dashboard renders the cluster overview as a responsive grid of panels.
+func Dashboard(d *model.Dashboard, width int) string {
+	if width < 20 {
+		width = 20
+	}
+
+	twoCol := width >= minTwoColWidth
+	panelWidth := width - 2 // single column: one border pair
+	if twoCol {
+		// Two panels + one-column gap + two border pairs.
+		panelWidth = (width - 1 - 4) / 2
+	}
+	if panelWidth < 16 {
+		panelWidth = 16
+	}
+
+	capacityContent := capacityBody(d.Capacity, panelWidth)
+	if !d.SectionOK("capacity") {
+		capacityContent = unavailableBody()
+	}
+
+	health := components.Panel("Health", healthBody(d.Health), panelWidth, panelInnerHeight)
+	capacity := components.Panel("Capacity", capacityContent, panelWidth, panelInnerHeight)
+	io := components.Panel("Client IO", ioBody(d.IO), panelWidth, panelInnerHeight)
+	recovery := components.Panel("Recovery", recoveryBody(d.Recovery, panelWidth), panelWidth, panelInnerHeight)
+
+	var grid string
+	if twoCol {
+		grid = lipgloss.JoinVertical(lipgloss.Left,
+			components.Row(health, capacity),
+			components.Row(io, recovery),
+		)
+	} else {
+		grid = lipgloss.JoinVertical(lipgloss.Left, health, capacity, io, recovery)
+	}
+
+	flagsWidth := lipgloss.Width(grid) - 2
+	if flagsWidth < panelWidth {
+		flagsWidth = panelWidth
+	}
+	flagsContent := flagsBody(d.Flags)
+	if !d.SectionOK("flags") {
+		flagsContent = unavailableBody()
+	}
+	flags := components.Panel("Flags", flagsContent, flagsWidth, 1)
+
+	sections := []string{grid}
+	// When the cluster has active health checks, expand them into a full-width
+	// detail section (code, summary and per-item detail lines) below the grid —
+	// the compact Health tile above only has room for the codes.
+	if detail := healthDetailPanel(d.Health, flagsWidth); detail != "" {
+		sections = append(sections, detail)
+	}
+	sections = append(sections, flags)
+
+	return lipgloss.JoinVertical(lipgloss.Left, sections...)
+}
+
+// healthDetailPanel renders the expanded, full-width health section shown when
+// the cluster has active checks. Each check contributes its code + severity, its
+// one-line summary, and any per-item detail lines from `ceph health detail`. It
+// returns "" for a healthy cluster (no checks), so the section only appears when
+// there is something to show.
+func healthDetailPanel(h model.Health, width int) string {
+	if len(h.Checks) == 0 {
+		return ""
+	}
+	var lines []string
+	for _, c := range h.Checks {
+		marker := styles.Health(model.HealthStatus(c.Severity)).Render("●")
+		lines = append(lines, fmt.Sprintf("%s %s  %s", marker, c.Code, styles.Faint.Render("("+c.Severity+")")))
+		if c.Summary != "" {
+			lines = append(lines, "    "+c.Summary)
+		}
+		for _, d := range c.Details {
+			// Some checks repeat the summary verbatim as their only detail
+			// (e.g. OSDMAP_FLAGS); don't echo it twice.
+			if d == c.Summary {
+				continue
+			}
+			lines = append(lines, styles.Faint.Render("      "+d))
+		}
+	}
+	return components.Panel("Health detail", strings.Join(lines, "\n"), width, len(lines))
+}
+
+// unavailableBody is shown in a panel whose data failed to load this cycle.
+func unavailableBody() string {
+	return styles.Faint.Render("unavailable — will retry next refresh")
+}
+
+func healthBody(h model.Health) string {
+	var b strings.Builder
+	b.WriteString(styles.Health(h.Status).Render(string(h.Status)))
+	if len(h.Checks) == 0 {
+		b.WriteString("\n" + styles.Faint.Render("no active checks"))
+		return b.String()
+	}
+	for _, c := range h.Checks {
+		marker := styles.Health(model.HealthStatus(c.Severity)).Render("●")
+		b.WriteString(fmt.Sprintf("\n%s %s", marker, c.Code))
+	}
+	return b.String()
+}
+
+func capacityBody(c model.Capacity, panelWidth int) string {
+	ratio := c.UsedRatio()
+	head := fmt.Sprintf("%s / %s  %s",
+		format.Bytes(c.UsedBytes),
+		format.Bytes(c.TotalBytes),
+		styles.Utilization(ratio).Render(format.Percent(ratio)),
+	)
+	meter := components.Meter(ratio, meterWidth(panelWidth))
+	avail := styles.Faint.Render("avail " + format.Bytes(c.AvailBytes))
+	return head + "\n" + meter + "\n" + avail
+}
+
+func ioBody(io model.ClientIO) string {
+	read := fmt.Sprintf("read   %-11s %s",
+		format.Rate(io.ReadBytesSec), styles.Faint.Render(fmt.Sprintf("%d op/s", io.ReadOpsSec)))
+	write := fmt.Sprintf("write  %-11s %s",
+		format.Rate(io.WriteBytesSec), styles.Faint.Render(fmt.Sprintf("%d op/s", io.WriteOpsSec)))
+	return read + "\n" + write
+}
+
+func recoveryBody(r model.Recovery, panelWidth int) string {
+	if !r.Active() {
+		clean := fmt.Sprintf("%d/%d PGs active+clean", r.CleanPGs, r.TotalPGs)
+		return styles.Health(model.HealthOK).Render("idle") + "\n" + styles.Faint.Render(clean)
+	}
+
+	var b strings.Builder
+	if r.RecoveringBytesSec > 0 {
+		b.WriteString("recovering " + format.Rate(r.RecoveringBytesSec) + "\n")
+	}
+	b.WriteString(fmt.Sprintf("misplaced %s  degraded %s", format.Percent(r.MisplacedRatio), format.Percent(r.DegradedRatio)))
+	if r.TotalPGs > 0 {
+		cleanRatio := float64(r.CleanPGs) / float64(r.TotalPGs)
+		b.WriteString(fmt.Sprintf("\n%d/%d clean ", r.CleanPGs, r.TotalPGs) + components.Bar(cleanRatio, meterWidth(panelWidth)/2))
+	}
+	return b.String()
+}
+
+func flagsBody(flags []string) string {
+	if len(flags) == 0 {
+		return styles.Faint.Render("none set")
+	}
+	return strings.Join(flags, "  ")
+}
+
+// meterWidth derives a sensible bar width from the panel width.
+func meterWidth(panelWidth int) int {
+	w := panelWidth - 2
+	switch {
+	case w < 8:
+		return 8
+	case w > 40:
+		return 40
+	default:
+		return w
+	}
+}

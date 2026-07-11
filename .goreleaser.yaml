@@ -1,0 +1,65 @@
+# GoReleaser configuration for Argonaut.
+#
+# The real (cluster-capable) binary links librados/librbd via cgo, which cannot
+# be cross-compiled, so we build linux/amd64 natively on an amd64 host that has
+# the Ceph client development headers installed (see .github/workflows/release.yml
+# and the README). arm64 is intentionally deferred to a later release.
+#
+# Validate locally without publishing (on a host with librados-dev installed):
+#   goreleaser release --snapshot --clean
+version: 2
+
+project_name: argonaut
+
+builds:
+  - id: argonaut
+    main: ./cmd/argonaut
+    binary: argonaut
+    env:
+      - CGO_ENABLED=1
+    tags:
+      - goceph
+    goos:
+      - linux
+    goarch:
+      - amd64
+    ldflags:
+      - -s -w
+      - -X github.com/cinpol/argonaut/internal/version.Version={{ .Version }}
+      - -X github.com/cinpol/argonaut/internal/version.Commit={{ .ShortCommit }}
+      - -X github.com/cinpol/argonaut/internal/version.Date={{ .Date }}
+
+archives:
+  - id: argonaut
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE
+      - NOTICE
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot-{{ .ShortCommit }}"
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+
+release:
+  github:
+    owner: cinpol
+    name: argonaut
+  # Create the release as a draft so you can review the artifacts and notes
+  # before publishing. Pre-release tags (e.g. v0.1.0-rc1) are marked automatically.
+  draft: true
+  prerelease: auto

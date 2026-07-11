@@ -1,0 +1,146 @@
+name: Distros
+
+# Build-compatibility matrix: does Argonaut's real (cgo + librados) build compile
+# and link? This complements ci.yml (which lints, tests and does a single native
+# build). Nothing here needs a cluster — the smoke test is `--version`, which
+# links librados and exits. Two independent questions, two jobs:
+#
+#   - build          → does it build on each supported DISTRO, using that distro's
+#                      natural way of getting the Ceph client (apt for Debian/
+#                      Ubuntu; the upstream repo for RHEL family, which ships no
+#                      librados-devel)?
+#   - release-build  → does it build against each supported Ceph RELEASE
+#                      (reef/squid/tentacle), pinned via the upstream repo on a
+#                      single controlled base image?
+#
+# Runs on:
+#   - pull requests   → catch breakage before it merges (main is PR-only,
+#                       so this already validates what lands on main)
+#   - a weekly schedule → catch package drift over time, without a code change
+#   - manual dispatch   → on demand
+
+on:
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays, 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Default Ceph client release for the `build` job's RHEL-family images (RHEL/
+# Alma/Rocky don't package librados-devel, so it comes from the upstream repo).
+# The `release-build` job below overrides this per matrix cell to cover every
+# supported release — see docs/testing.md.
+env:
+  CEPH_RELEASE: squid
+
+jobs:
+  build:
+    name: ${{ matrix.distro }}
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { distro: "Ubuntu 22.04", image: "ubuntu:22.04", family: debian }
+          - { distro: "Ubuntu 24.04", image: "ubuntu:24.04", family: debian }
+          - { distro: "Debian 12", image: "debian:12", family: debian }
+          - { distro: "Debian 13", image: "debian:13", family: debian }
+          - { distro: "AlmaLinux 9", image: "almalinux:9", family: rhel, el: 9 }
+          # AlmaLinux 10 (el10) is omitted for now: upstream Ceph only publishes
+          # el10 packages for tentacle, not for the squid default this job pins.
+          # Re-add once reef/squid also ship el10.
+
+    steps:
+      - name: Install dependencies (Debian family)
+        if: matrix.family == 'debian'
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates git gcc libc6-dev pkg-config tar \
+            librados-dev librbd-dev
+
+      - name: Install dependencies (RHEL family)
+        if: matrix.family == 'rhel'
+        run: |
+          dnf -y install ca-certificates git gcc pkgconf-pkg-config tar dnf-plugins-core
+          # Ceph's own RPMs depend on packages (libthrift, lttng-ust, ...) that
+          # live in EPEL and CRB, so enable both before installing librados.
+          dnf -y install epel-release
+          dnf config-manager --set-enabled crb
+          # RHEL/Alma/Rocky don't ship librados-devel; pull it from the upstream
+          # Ceph repo, pinned to $CEPH_RELEASE.
+          cat >/etc/yum.repos.d/ceph.repo <<EOF
+          [ceph]
+          name=Ceph \$basearch
+          baseurl=https://download.ceph.com/rpm-${CEPH_RELEASE}/el${{ matrix.el }}/\$basearch
+          enabled=1
+          gpgcheck=1
+          gpgkey=https://download.ceph.com/keys/release.asc
+          EOF
+          dnf -y install librados-devel librbd-devel
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build (goceph tag)
+        run: go build -tags goceph -buildvcs=false -o /tmp/argonaut ./cmd/argonaut
+
+      - name: Smoke test
+        run: /tmp/argonaut --version
+
+  # Does Argonaut build & link against each Ceph release Argonaut targets
+  # (internal/version.Supported)? Each cell pins one release from the upstream
+  # Ceph repo on a matching AlmaLinux base. el9 carries every supported release;
+  # el10 currently only exists for tentacle, so that's the sole el10 cell. This
+  # is the build/link half of release support; behavioural coverage is the
+  # decode fixtures (see docs/testing.md).
+  release-build:
+    name: Ceph ${{ matrix.ceph }} (el${{ matrix.el }})
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { ceph: reef, el: 9, image: "almalinux:9" }
+          - { ceph: squid, el: 9, image: "almalinux:9" }
+          - { ceph: tentacle, el: 9, image: "almalinux:9" }
+          - { ceph: tentacle, el: 10, image: "almalinux:10" }
+
+    steps:
+      - name: Install dependencies
+        run: |
+          dnf -y install ca-certificates git gcc pkgconf-pkg-config tar dnf-plugins-core
+          # Ceph's own RPMs depend on packages (libthrift, lttng-ust, ...) that
+          # live in EPEL and CRB, so enable both before installing librados.
+          dnf -y install epel-release
+          dnf config-manager --set-enabled crb
+          # librados-devel from the upstream Ceph repo, pinned to this cell's
+          # release and EL version.
+          cat >/etc/yum.repos.d/ceph.repo <<EOF
+          [ceph]
+          name=Ceph \$basearch
+          baseurl=https://download.ceph.com/rpm-${{ matrix.ceph }}/el${{ matrix.el }}/\$basearch
+          enabled=1
+          gpgcheck=1
+          gpgkey=https://download.ceph.com/keys/release.asc
+          EOF
+          dnf -y install librados-devel librbd-devel
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build (goceph tag)
+        run: go build -tags goceph -buildvcs=false -o /tmp/argonaut ./cmd/argonaut
+
+      - name: Smoke test
+        run: /tmp/argonaut --version
