@@ -130,7 +130,7 @@ make build-mock
 | Platform | Status | Notes |
 |----------|:------:|-------|
 | Linux `amd64` | ✅ | Prebuilt binaries; the primary tested target. |
-| Linux `arm64` | ⚠️ | Should build from source; prebuilt binaries are planned and it is not yet tested. |
+| Linux `arm64` | ✅ | Builds natively from source. Prebuilt binaries are planned. |
 | macOS / Windows | ❌ | librados is not available; only the mock client runs, for development/demos. |
 
 ### Ceph releases
@@ -158,7 +158,7 @@ build from source** you also need the development headers, a C compiler and
 
 | Distro family | Runtime | Build |
 |---------------|---------|-------|
-| Debian / Ubuntu | `librados2 librbd1` | `librados-dev librbd-dev gcc pkg-config` |
+| Debian / Ubuntu | `librados2 librbd1` | `build-essential pkg-config librados-dev librbd-dev libcephfs-dev` |
 | RHEL / Rocky / Alma / Fedora | `librados2 librbd1` | `librados-devel librbd-devel gcc pkgconf-pkg-config` |
 
 Building from source also needs **Go 1.26+**.
