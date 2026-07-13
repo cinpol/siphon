@@ -27,6 +27,17 @@ jobs:
       - name: Install cross-compiler and Ceph client libraries
         run: |
           sudo dpkg --add-architecture arm64
+          # Configure APT to fetch arm64 packages from ports.ubuntu.com
+          sudo sed -i 's/^Types: deb$/Types: deb\nArchitectures: amd64 i386/' /etc/apt/sources.list.d/ubuntu.sources || true
+          sudo sed -i 's/^deb /deb [arch=amd64,i386] /' /etc/apt/sources.list || true
+          cat <<EOF | sudo tee /etc/apt/sources.list.d/ubuntu-ports.sources
+          Types: deb
+          Architectures: arm64
+          URIs: http://ports.ubuntu.com/ubuntu-ports
+          Suites: noble noble-updates noble-backports noble-security
+          Components: main universe restricted multiverse
+          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+          EOF
           sudo apt-get update
           sudo apt-get install -y gcc-aarch64-linux-gnu librados-dev librbd-dev librados-dev:arm64 librbd-dev:arm64
 
