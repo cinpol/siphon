@@ -10,8 +10,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/cinpol/argonaut/internal/ceph/mock"
-	"github.com/cinpol/argonaut/internal/service"
+	"github.com/cinpol/siphon/internal/ceph/mock"
+	"github.com/cinpol/siphon/internal/service"
 )
 
 // fold applies a message to the model and returns the concrete type, tidying up

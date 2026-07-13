@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cinpol/argonaut/internal/ceph/mock"
-	"github.com/cinpol/argonaut/internal/model"
+	"github.com/cinpol/siphon/internal/ceph/mock"
+	"github.com/cinpol/siphon/internal/model"
 )
 
 func TestDashboardAggregates(t *testing.T) {

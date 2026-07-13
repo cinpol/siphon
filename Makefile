@@ -1,4 +1,4 @@
-# Argonaut build automation.
+# Siphon build automation.
 #
 # `make build` produces the real, cluster-capable binary: it enables CGO and
 # links the Ceph client libraries (librados/librbd), which must be installed
@@ -7,8 +7,8 @@
 # or demos on machines without the Ceph libraries.
 
 BIN_DIR := bin
-BINARY  := $(BIN_DIR)/argonaut
-VERSION_PKG := github.com/cinpol/argonaut/internal/version
+BINARY  := $(BIN_DIR)/siphon
+VERSION_PKG := github.com/cinpol/siphon/internal/version
 
 # Version metadata stamped into the binary. Override on the command line if
 # needed, e.g. `make build VERSION=1.2.3`.
@@ -25,11 +25,11 @@ LDFLAGS := -s -w \
 
 ## build: build the real binary (needs CGO + librados/librbd; see README)
 build:
-	CGO_ENABLED=1 go build -tags goceph -ldflags "$(LDFLAGS)" -o $(BINARY) ./cmd/argonaut
+	CGO_ENABLED=1 go build -tags goceph -ldflags "$(LDFLAGS)" -o $(BINARY) ./cmd/siphon
 
 ## build-mock: build a pure-Go binary (mock client only; no Ceph libraries needed)
 build-mock:
-	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o $(BINARY)-mock ./cmd/argonaut
+	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o $(BINARY)-mock ./cmd/siphon
 
 ## test: run the test suite
 test:

@@ -1,4 +1,4 @@
-// Package service holds Argonaut's business logic.
+// Package service holds Siphon's business logic.
 //
 // It sits between the UI and the ceph.Client transport. The UI never talks to a
 // ceph.Client directly; it goes through a Service. This is where operational
@@ -14,8 +14,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cinpol/argonaut/internal/ceph"
-	"github.com/cinpol/argonaut/internal/model"
+	"github.com/cinpol/siphon/internal/ceph"
+	"github.com/cinpol/siphon/internal/model"
 )
 
 // Service exposes high-level operations to the UI.

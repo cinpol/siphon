@@ -4,7 +4,7 @@ import (
 	"math"
 	"strings"
 
-	"github.com/cinpol/argonaut/internal/ui/styles"
+	"github.com/cinpol/siphon/internal/ui/styles"
 )
 
 // Meter renders a horizontal utilisation bar for a 0..1 ratio, coloured by

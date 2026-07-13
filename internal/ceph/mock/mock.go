@@ -14,7 +14,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/cinpol/argonaut/internal/model"
+	"github.com/cinpol/siphon/internal/model"
 )
 
 // Client is a canned, in-memory ceph.Client. Admin commands mutate the in-memory

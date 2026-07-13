@@ -8,7 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/cinpol/argonaut/internal/ui/styles"
+	"github.com/cinpol/siphon/internal/ui/styles"
 )
 
 // tableFilter is the shared "/" live filter used by every flat table view (OSDs,

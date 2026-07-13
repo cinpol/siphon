@@ -1,4 +1,4 @@
-module github.com/cinpol/argonaut
+module github.com/cinpol/siphon
 
 go 1.26.4
 

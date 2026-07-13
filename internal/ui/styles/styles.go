@@ -1,4 +1,4 @@
-// Package styles centralises Argonaut's Lipgloss styling.
+// Package styles centralises Siphon's Lipgloss styling.
 //
 // Keeping colours and text styles in one place gives the TUI a consistent look
 // and a single point to evolve into a proper theme (including light/dark and
@@ -8,12 +8,12 @@ package styles
 import (
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/cinpol/argonaut/internal/model"
+	"github.com/cinpol/siphon/internal/model"
 )
 
 // Palette. Kept as named vars so a future theme layer can swap them.
 var (
-	colorAccent   = lipgloss.Color("#7D56F4") // Argonaut purple
+	colorAccent   = lipgloss.Color("#7D56F4") // Siphon purple
 	colorOK       = lipgloss.Color("42")      // green
 	colorWarn     = lipgloss.Color("214")     // orange
 	colorErr      = lipgloss.Color("196")     // red
@@ -66,7 +66,7 @@ var (
 	// Separator is the full-width green rule at the top of the screen.
 	Separator = lipgloss.NewStyle().Foreground(colorOK)
 
-	// Brand renders the "Argonaut v0.1.0" wordmark in the header.
+	// Brand renders the "Siphon v0.1.0" wordmark in the header.
 	Brand = lipgloss.NewStyle().Bold(true).Foreground(colorAccent)
 
 	// HeaderKey/HeaderValue style the cluster-info column: orange keys, bold

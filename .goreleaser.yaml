@@ -1,4 +1,4 @@
-# GoReleaser configuration for Argonaut.
+# GoReleaser configuration for Siphon.
 #
 # The real (cluster-capable) binary links librados/librbd via cgo, which cannot
 # be cross-compiled, so we build linux/amd64 natively on an amd64 host that has
@@ -9,12 +9,12 @@
 #   goreleaser release --snapshot --clean
 version: 2
 
-project_name: argonaut
+project_name: siphon
 
 builds:
-  - id: argonaut
-    main: ./cmd/argonaut
-    binary: argonaut
+  - id: siphon
+    main: ./cmd/siphon
+    binary: siphon
     env:
       - CGO_ENABLED=1
     tags:
@@ -25,12 +25,12 @@ builds:
       - amd64
     ldflags:
       - -s -w
-      - -X github.com/cinpol/argonaut/internal/version.Version={{ .Version }}
-      - -X github.com/cinpol/argonaut/internal/version.Commit={{ .ShortCommit }}
-      - -X github.com/cinpol/argonaut/internal/version.Date={{ .Date }}
+      - -X github.com/cinpol/siphon/internal/version.Version={{ .Version }}
+      - -X github.com/cinpol/siphon/internal/version.Commit={{ .ShortCommit }}
+      - -X github.com/cinpol/siphon/internal/version.Date={{ .Date }}
 
 archives:
-  - id: argonaut
+  - id: siphon
     formats: [tar.gz]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
@@ -58,7 +58,7 @@ changelog:
 release:
   github:
     owner: cinpol
-    name: argonaut
+    name: siphon
   # Create the release as a draft so you can review the artifacts and notes
   # before publishing. Pre-release tags (e.g. v0.1.0-rc1) are marked automatically.
   draft: true

@@ -2,7 +2,7 @@
 
 // Package goceph is the native Ceph transport, backed by go-ceph (librados).
 //
-// It is the ONLY package in Argonaut permitted to import go-ceph. Everything
+// It is the ONLY package in Siphon permitted to import go-ceph. Everything
 // above it depends on the ceph.Client interface, so this file is where cgo and
 // librados live and nowhere else.
 //
@@ -26,9 +26,9 @@ import (
 
 	"github.com/ceph/go-ceph/rados"
 
-	"github.com/cinpol/argonaut/internal/ceph"
-	"github.com/cinpol/argonaut/internal/ceph/decode"
-	"github.com/cinpol/argonaut/internal/model"
+	"github.com/cinpol/siphon/internal/ceph"
+	"github.com/cinpol/siphon/internal/ceph/decode"
+	"github.com/cinpol/siphon/internal/model"
 )
 
 // Client is the native go-ceph implementation of ceph.Client.

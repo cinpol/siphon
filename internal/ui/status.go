@@ -1,6 +1,6 @@
 package ui
 
-import "github.com/cinpol/argonaut/internal/ui/styles"
+import "github.com/cinpol/siphon/internal/ui/styles"
 
 // staleBanner is shown above a view's last-good data when a refresh fails, so a
 // transient error doesn't wipe what the operator was reading. Retrying (r) or

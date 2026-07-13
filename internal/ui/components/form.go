@@ -7,7 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/cinpol/argonaut/internal/ui/styles"
+	"github.com/cinpol/siphon/internal/ui/styles"
 )
 
 // FormState reports where a Form is in its lifecycle.

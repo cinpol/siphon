@@ -2,7 +2,7 @@ package goceph
 
 // Config holds the connection parameters for the native go-ceph client.
 //
-// It is defined outside any build tag so that callers (cmd/argonaut) compile
+// It is defined outside any build tag so that callers (cmd/siphon) compile
 // identically whether or not the go-ceph transport is built in. The real and
 // stub implementations of New both accept this type.
 type Config struct {

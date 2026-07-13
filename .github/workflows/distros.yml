@@ -1,6 +1,6 @@
 name: Distros
 
-# Build-compatibility matrix: does Argonaut's real (cgo + librados) build compile
+# Build-compatibility matrix: does Siphon's real (cgo + librados) build compile
 # and link? This complements ci.yml (which lints, tests and does a single native
 # build). Nothing here needs a cluster — the smoke test is `--version`, which
 # links librados and exits. Two independent questions, two jobs:
@@ -89,12 +89,12 @@ jobs:
           go-version-file: go.mod
 
       - name: Build (goceph tag)
-        run: go build -tags goceph -buildvcs=false -o /tmp/argonaut ./cmd/argonaut
+        run: go build -tags goceph -buildvcs=false -o /tmp/siphon ./cmd/siphon
 
       - name: Smoke test
-        run: /tmp/argonaut --version
+        run: /tmp/siphon --version
 
-  # Does Argonaut build & link against each Ceph release Argonaut targets
+  # Does Siphon build & link against each Ceph release Siphon targets
   # (internal/version.Supported)? Each cell pins one release from the upstream
   # Ceph repo on a matching AlmaLinux base. el9 carries every supported release;
   # el10 currently only exists for tentacle, so that's the sole el10 cell. This
@@ -140,7 +140,7 @@ jobs:
           go-version-file: go.mod
 
       - name: Build (goceph tag)
-        run: go build -tags goceph -buildvcs=false -o /tmp/argonaut ./cmd/argonaut
+        run: go build -tags goceph -buildvcs=false -o /tmp/siphon ./cmd/siphon
 
       - name: Smoke test
-        run: /tmp/argonaut --version
+        run: /tmp/siphon --version

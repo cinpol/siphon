@@ -3,7 +3,7 @@ package decode
 import (
 	"testing"
 
-	"github.com/cinpol/argonaut/internal/model"
+	"github.com/cinpol/siphon/internal/model"
 )
 
 func TestHealth(t *testing.T) {

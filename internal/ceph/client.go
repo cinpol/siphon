@@ -1,10 +1,10 @@
-// Package ceph defines the single seam between Argonaut and a Ceph cluster.
+// Package ceph defines the single seam between Siphon and a Ceph cluster.
 //
 // Every interaction with Ceph goes through the Client interface declared here.
 // Only implementations that live under internal/ceph (the go-ceph transport and
 // the in-memory mock) are permitted to import a concrete transport such as
 // go-ceph; the rest of the application — business logic and UI — depends solely
-// on this interface. That boundary is what keeps Argonaut:
+// on this interface. That boundary is what keeps Siphon:
 //
 //   - testable: the whole app runs against internal/ceph/mock with no cluster;
 //   - transport-swappable: go-ceph can be augmented or replaced without touching
@@ -20,7 +20,7 @@ package ceph
 import (
 	"context"
 
-	"github.com/cinpol/argonaut/internal/model"
+	"github.com/cinpol/siphon/internal/model"
 )
 
 // Client is the abstract handle to a Ceph cluster. Methods take a context so
