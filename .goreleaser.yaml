@@ -36,8 +36,8 @@ builds:
       - CGO_ENABLED=1
       - CC=aarch64-linux-gnu-gcc
       - PKG_CONFIG_PATH=/tmp/arm64-sysroot/usr/lib/aarch64-linux-gnu/pkgconfig
-      - CGO_CFLAGS=--sysroot=/tmp/arm64-sysroot -I/tmp/arm64-sysroot/usr/include
-      - CGO_LDFLAGS=--sysroot=/tmp/arm64-sysroot -L/tmp/arm64-sysroot/usr/lib/aarch64-linux-gnu
+      - CGO_CFLAGS=-I/tmp/arm64-sysroot/usr/include
+      - CGO_LDFLAGS=-L/tmp/arm64-sysroot/usr/lib/aarch64-linux-gnu -Wl,--allow-shlib-undefined -Wl,-rpath-link=/tmp/arm64-sysroot/usr/lib/aarch64-linux-gnu
     tags:
       - goceph
     goos:
