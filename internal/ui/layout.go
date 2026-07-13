@@ -6,20 +6,20 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/cinpol/argonaut/internal/model"
-	"github.com/cinpol/argonaut/internal/ui/styles"
-	"github.com/cinpol/argonaut/internal/version"
+	"github.com/cinpol/siphon/internal/model"
+	"github.com/cinpol/siphon/internal/ui/styles"
+	"github.com/cinpol/siphon/internal/version"
 )
 
-// logoLines is the Argonaut ASCII wordmark shown at the top-left of the header.
-// Raw-string segments keep the backslashes literal; the backticks in the art are
-// spliced in as double-quoted strings.
+// logoLines is the Siphon ASCII wordmark shown at the top-left of the header.
+// Each line is a raw string; backslashes stay literal, so the art can use them
+// freely.
 var logoLines = []string{
-	`   ___                                __ `,
-	`  / _ | _______ ____  ___  ___ ___ __/ /_`,
-	` / __ |/ __/ _ ` + "`" + `/ _ \/ _ \/ _ ` + "`" + `/ // / __/`,
-	`/_/ |_/_/  \_, /\___/_//_/\_,_/\_,_/\__/ `,
-	`          /___/                          `,
+	`   _____      __           `,
+	`  / __(_)__  / /  ___  ___ `,
+	` _\ \/ / _ \/ _ \/ _ \/ _ \`,
+	`/___/_/ .__/_//_/\___/_//_/`,
+	`     /_/                   `,
 }
 
 // headerRows is the header block's height: every column is padded to it, and
@@ -161,7 +161,7 @@ func (m Model) headerHeight() int {
 	return lipgloss.Height(m.headerBlock())
 }
 
-// logoColumn is the leftmost column: the ASCII "Argonaut" wordmark in orange.
+// logoColumn is the leftmost column: the ASCII "Siphon" wordmark in orange.
 func (m Model) logoColumn() string {
 	return padColumn(styles.HeaderKey.Render(strings.Join(logoLines, "\n")))
 }
@@ -192,7 +192,7 @@ func (m Model) clusterInfoColumn() string {
 	statusRow := styles.HeaderKey.Render(fmt.Sprintf("%-9s", "Status:")) + " " +
 		styles.Health(status).Bold(true).Render(string(status))
 
-	// The Argonaut row shows the running application version. On the mock it also
+	// The Siphon row shows the running application version. On the mock it also
 	// carries a prominent warning badge so a session on demo data can never be
 	// mistaken for a live cluster. The badge is kept short ("MOCK") so it doesn't
 	// widen the header column enough to clip the action labels.
@@ -200,7 +200,7 @@ func (m Model) clusterInfoColumn() string {
 	if m.clientName == "mock" {
 		appVal += "  " + styles.MockBadge.Render("MOCK")
 	}
-	appRow := styles.HeaderKey.Render(fmt.Sprintf("%-9s", "Argonaut:")) + " " + appVal
+	appRow := styles.HeaderKey.Render(fmt.Sprintf("%-9s", "Siphon:")) + " " + appVal
 
 	fields := lipgloss.JoinVertical(lipgloss.Left,
 		field("Context", ctx),

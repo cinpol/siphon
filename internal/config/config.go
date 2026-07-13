@@ -1,9 +1,9 @@
-// Package config loads Argonaut's own configuration.
+// Package config loads Siphon's own configuration.
 //
-// This is Argonaut's application config (preferences, how to reach the
+// This is Siphon's application config (preferences, how to reach the
 // cluster) — distinct from Ceph's own ceph.conf, which librados reads. The
 // file lives under the XDG config directory as YAML, e.g.
-// ~/.config/argonaut/config.yaml. When no file exists, built-in defaults are
+// ~/.config/siphon/config.yaml. When no file exists, built-in defaults are
 // used so the application runs out of the box.
 //
 // Persistence of richer state (connection profiles for kubectl-style context
@@ -21,7 +21,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Config is the root of Argonaut's application configuration.
+// Config is the root of Siphon's application configuration.
 type Config struct {
 	Ceph CephConfig `yaml:"ceph"`
 	UI   UIConfig   `yaml:"ui"`
@@ -59,19 +59,19 @@ func Default() Config {
 	}
 }
 
-// Dir returns Argonaut's config directory, honouring XDG_CONFIG_HOME and
-// falling back to ~/.config/argonaut.
+// Dir returns Siphon's config directory, honouring XDG_CONFIG_HOME and
+// falling back to ~/.config/siphon.
 func Dir() string {
 	if x := os.Getenv("XDG_CONFIG_HOME"); x != "" {
-		return filepath.Join(x, "argonaut")
+		return filepath.Join(x, "siphon")
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		// Last resort: current directory. Better than panicking on a headless
 		// or misconfigured host.
-		return filepath.Join(".", ".config", "argonaut")
+		return filepath.Join(".", ".config", "siphon")
 	}
-	return filepath.Join(home, ".config", "argonaut")
+	return filepath.Join(home, ".config", "siphon")
 }
 
 // Path returns the full path to the config file.

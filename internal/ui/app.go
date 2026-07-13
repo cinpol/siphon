@@ -22,10 +22,10 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/cinpol/argonaut/internal/model"
-	"github.com/cinpol/argonaut/internal/service"
-	"github.com/cinpol/argonaut/internal/ui/styles"
-	"github.com/cinpol/argonaut/internal/ui/views"
+	"github.com/cinpol/siphon/internal/model"
+	"github.com/cinpol/siphon/internal/service"
+	"github.com/cinpol/siphon/internal/ui/styles"
+	"github.com/cinpol/siphon/internal/ui/views"
 )
 
 // fetchTimeout bounds each cluster poll so a slow or unreachable cluster never

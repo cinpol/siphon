@@ -1,18 +1,18 @@
 # Testing against Ceph releases
 
-This is a maintainer/contributor guide to how Argonaut is tested and how we
+This is a maintainer/contributor guide to how Siphon is tested and how we
 decide it "supports" a given Ceph release. If you just want to build and run the
 project, start with [CONTRIBUTING.md](../CONTRIBUTING.md) and the README's
 **Requirements** section instead.
 
-Argonaut targets three Ceph releases at go-live — **Reef (18)**, **Squid (19)**
+Siphon targets three Ceph releases at go-live — **Reef (18)**, **Squid (19)**
 and **Tentacle (20)**. That list lives in one place, `internal/version`
 (`version.Supported`), and the decoding layer (`internal/ceph/decode`) reads it
 to adapt when Ceph's admin-command JSON differs between releases.
 
 ## Two separate questions
 
-"Does Argonaut support Ceph release X?" is really two independent questions, and
+"Does Siphon support Ceph release X?" is really two independent questions, and
 they are tested in different ways:
 
 1. **Build/link compatibility** — does the real (cgo + librados) binary
@@ -21,7 +21,7 @@ they are tested in different ways:
    against one client version generally talks fine to a cluster running a
    different (compatible) version, exactly like the `ceph` CLI does.
 
-2. **Functional / behavioural compatibility** — does Argonaut *parse* release
+2. **Functional / behavioural compatibility** — does Siphon *parse* release
    X's admin-command JSON and *drive* its operations correctly? Ceph
    occasionally changes command output shapes and command names between
    releases. This is where real support is won or lost, and it is caught by unit
@@ -63,7 +63,7 @@ needed):
           - { ceph: tentacle, el: 10, image: almalinux:10 }
     # …installs librados-devel from
     #   https://download.ceph.com/rpm-${{ matrix.ceph }}/el${{ matrix.el }}/$basearch
-    #   then: go build -tags goceph -buildvcs=false && argonaut --version
+    #   then: go build -tags goceph -buildvcs=false && siphon --version
   ```
 
 When adding a future release, add a cell and confirm the upstream repo publishes
@@ -77,7 +77,7 @@ Same idea, by hand. On Debian/Ubuntu you get the distro's client:
 
 ```sh
 sudo apt-get install -y librados-dev librbd-dev gcc pkg-config
-go build -tags goceph ./cmd/argonaut
+go build -tags goceph ./cmd/siphon
 ```
 
 To pin a specific upstream release instead, add Ceph's own apt/rpm repo before
@@ -110,7 +110,7 @@ EOF
 sudo dnf -y install librados-devel librbd-devel
 ```
 
-`argonaut --version` after building confirms the binary links.
+`siphon --version` after building confirms the binary links.
 
 ## Dimension 2 — functional / behavioural compatibility
 
@@ -127,7 +127,7 @@ There are two layers of defence here.
 ### Golden JSON fixtures (the primary mechanism)
 
 The `internal/ceph/decode` package is the single choke point where raw Ceph JSON
-becomes Argonaut's transport-agnostic `internal/model` types. Because it is pure
+becomes Siphon's transport-agnostic `internal/model` types. Because it is pure
 (bytes in, models out, no cluster), it is the cheapest place to lock down
 cross-release behaviour: capture **real** admin-command output from each
 supported release and assert it decodes correctly.
@@ -149,7 +149,7 @@ new release, the failing decode test tells us exactly what drifted — before a
 user hits it.
 
 **Capturing fixtures** from any reachable cluster (see the disposable-cluster
-recipe below). This is the full set of admin commands Argonaut decodes — one
+recipe below). This is the full set of admin commands Siphon decodes — one
 file each:
 
 ```sh
@@ -181,11 +181,11 @@ not values, so placeholder values pass just the same.
 ### Live functional runs on a disposable cluster
 
 Fixtures cover decoding; they don't cover the *write* side (that an operation
-issues the right command and the cluster accepts it). For that, run Argonaut
+issues the right command and the cluster accepts it). For that, run Siphon
 against a throwaway cluster of the target release. Two low-cost options:
 
 - **cephadm on a single VM** — closest to production; also gives you a real
-  keyring and `ceph.conf` for end-to-end auth testing. Point Argonaut at it with
+  keyring and `ceph.conf` for end-to-end auth testing. Point Siphon at it with
   `--client auto`. The dev server in `CLAUDE.md` is suitable for this.
 
   ```sh
@@ -193,7 +193,7 @@ against a throwaway cluster of the target release. Two low-cost options:
   curl -fsSL https://download.ceph.com/rpm-squid/el9/noarch/cephadm -o cephadm
   sudo ./cephadm bootstrap --mon-ip <VM_IP>
   # then, from the same host:
-  sudo argonaut --client auto
+  sudo siphon --client auto
   ```
 
 - **`vstart.sh`** from a Ceph source checkout of the target branch — fastest for

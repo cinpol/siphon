@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Argonaut is in early development. Security fixes are made against the latest
+Siphon is in early development. Security fixes are made against the latest
 release and the `main` branch; older tagged releases are not maintained.
 
 ## Reporting a vulnerability
@@ -19,8 +19,8 @@ Report vulnerabilities privately through GitHub's built-in reporting:
 
 Helpful details to include:
 
-- the affected version (`argonaut --version`) and platform,
-- the Ceph release, and how Argonaut was built (`goceph` tag or mock),
+- the affected version (`siphon --version`) and platform,
+- the Ceph release, and how Siphon was built (`goceph` tag or mock),
 - steps to reproduce, the impact, and any suggested fix.
 
 As an early-stage project, responses are best-effort: we aim to acknowledge a
@@ -28,7 +28,7 @@ report within a few days and will coordinate a fix and disclosure with you.
 
 ## Scope notes
 
-- Argonaut runs with the privileges of the operator and the Ceph keyring it is
+- Siphon runs with the privileges of the operator and the Ceph keyring it is
   given, and it performs cluster-mutating operations — treat it like the `ceph`
   CLI. Protect the host and keyring accordingly.
 - The `goceph` build dynamically links the Ceph client libraries

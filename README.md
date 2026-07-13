@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="argonaut-logo.png" alt="Argonaut" width="600">
+  <img src="siphon-logo.png" alt="Siphon" width="600">
 </p>
 
 <p align="center">
@@ -13,25 +13,28 @@
   <b>Keyboard-driven Terminal UI for Ceph, inspired by <a href="https://k9scli.io/">k9s</a>.</b>
 </p>
 
+> [!NOTE]
+> **Siphon was previously named Argonaut** — renamed to avoid confusion with Ceph's own [Argonaut](https://docs.ceph.com/en/latest/releases/argonaut/) release.
+
 Stop memorizing long `ceph` commands. Browse your cluster, inspect resources, and
 perform common operational tasks through a fast, intuitive terminal interface.
 
-Argonaut replaces repetitive Ceph CLI workflows with an interactive terminal
+Siphon replaces repetitive Ceph CLI workflows with an interactive terminal
 interface while staying transparent: every action shows the underlying Ceph
 operation, and destructive changes always require confirmation.
 
 <p align="center">
-  <img src="argonaut-demo.gif" alt="Argonaut demo">
+  <img src="siphon-demo.gif" alt="Siphon demo">
 </p>
 
 ---
 
-## Why Argonaut?
+## Why Siphon?
 
 Ceph ships an excellent CLI — but many operational workflows mean long command
 sequences, remembering exact flags, or juggling several terminal windows.
 
-Argonaut gives you:
+Siphon gives you:
 
 - **Fast keyboard navigation** across every resource
 - **Safe destructive actions** — always confirmed, never a surprise
@@ -56,14 +59,14 @@ Argonaut gives you:
 
 ## Installation
 
-> Argonaut manages a real cluster through **librados** (via
+> Siphon manages a real cluster through **librados** (via
 > [go-ceph](https://github.com/ceph/go-ceph) + cgo), so it runs on **Linux**. See
 > [Requirements](#requirements) for the full support matrix.
 
 ### Download a prebuilt binary (recommended)
 
 Prebuilt **linux/amd64** binaries are attached to each
-[GitHub Release](https://github.com/cinpol/argonaut/releases). Install the Ceph
+[GitHub Release](https://github.com/cinpol/siphon/releases). Install the Ceph
 client runtime libraries first:
 
 ```sh
@@ -78,20 +81,20 @@ release):
 
 ```sh
 VERSION=v0.1.0
-BASE="https://github.com/cinpol/argonaut/releases/download/$VERSION"
+BASE="https://github.com/cinpol/siphon/releases/download/$VERSION"
 
-curl -LO "$BASE/argonaut_${VERSION#v}_linux_amd64.tar.gz"
+curl -LO "$BASE/siphon_${VERSION#v}_linux_amd64.tar.gz"
 curl -LO "$BASE/checksums.txt"
 
 # Verify the download
 sha256sum --ignore-missing -c checksums.txt
 
 # Extract and install
-tar xzf "argonaut_${VERSION#v}_linux_amd64.tar.gz"
-sudo install -m 0755 argonaut /usr/local/bin/argonaut
+tar xzf "siphon_${VERSION#v}_linux_amd64.tar.gz"
+sudo install -m 0755 siphon /usr/local/bin/siphon
 
-argonaut --version
-sudo argonaut          # --client auto
+siphon --version
+sudo siphon          # --client auto
 ```
 
 `arm64` and other package channels (Homebrew, deb/rpm) are planned for later
@@ -102,10 +105,10 @@ releases — until then, other platforms build from source.
 Install the build packages (see [Requirements](#requirements)), then:
 
 ```sh
-git clone https://github.com/cinpol/argonaut.git
-cd argonaut
+git clone https://github.com/cinpol/siphon.git
+cd siphon
 make build
-sudo ./bin/argonaut          # --client auto
+sudo ./bin/siphon          # --client auto
 ```
 
 `sudo` (or another user that can read the admin keyring) lets librados
@@ -118,7 +121,7 @@ no Ceph required:
 
 ```sh
 make build-mock
-./bin/argonaut-mock --client mock
+./bin/siphon-mock --client mock
 ```
 
 ---
@@ -135,7 +138,7 @@ make build-mock
 
 ### Ceph releases
 
-Argonaut targets the currently maintained Ceph releases:
+Siphon targets the currently maintained Ceph releases:
 
 | Release | Major |
 |---------|:-----:|
@@ -165,16 +168,16 @@ Building from source also needs **Go 1.26+**.
 
 ### Cluster access
 
-Argonaut authenticates exactly like the `ceph` CLI: it needs a reachable cluster
+Siphon authenticates exactly like the `ceph` CLI: it needs a reachable cluster
 with a valid **`ceph.conf`** and a client **keyring**. If `ceph -s` works from
-the host (as the user running Argonaut), Argonaut will connect too.
+the host (as the user running Siphon), Siphon will connect too.
 
 ---
 
 ## Usage
 
 ```sh
-argonaut [flags]
+siphon [flags]
 ```
 
 | Flag | Default | Description |
@@ -198,7 +201,7 @@ to explicitly run against the built-in demo cluster.
 
 ## Configuration
 
-Optional, loaded from `~/.config/argonaut/config.yaml` (honours
+Optional, loaded from `~/.config/siphon/config.yaml` (honours
 `XDG_CONFIG_HOME`). Built-in defaults are used when absent.
 
 ```yaml
@@ -216,7 +219,7 @@ ui:
 Strict separation of concerns; the dependency direction always points inward:
 
 ```
-cmd/argonaut         entrypoint: wiring only
+cmd/siphon         entrypoint: wiring only
         │
         ▼
 internal/ui          Bubble Tea app (Model/Update/View), views, styles
@@ -242,7 +245,7 @@ the app testable against the mock and free of any single transport.
 
 ## Status
 
-Argonaut is under active development. Implemented so far:
+Siphon is under active development. Implemented so far:
 
 - ✅ Dashboard
 - ✅ OSDs
@@ -276,7 +279,7 @@ Contributions are welcome — see [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ## Acknowledgements
 
-Argonaut is inspired by the excellent work behind [k9s](https://k9scli.io/),
+Siphon is inspired by the excellent work behind [k9s](https://k9scli.io/),
 bringing a similar keyboard-driven operational experience to Ceph clusters. It is
 built on [Bubble Tea](https://github.com/charmbracelet/bubbletea) and
 [go-ceph](https://github.com/ceph/go-ceph).
@@ -286,5 +289,5 @@ built on [Bubble Tea](https://github.com/charmbracelet/bubbletea) and
 ## License
 
 Licensed under the [Apache License 2.0](./LICENSE). See [NOTICE](./NOTICE) for
-attribution and third-party components. Argonaut links the Ceph client libraries
+attribution and third-party components. Siphon links the Ceph client libraries
 (librados/librbd, LGPL-2.1) dynamically when built with the `goceph` tag.

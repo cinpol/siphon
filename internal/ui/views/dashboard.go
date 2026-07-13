@@ -11,10 +11,10 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/cinpol/argonaut/internal/model"
-	"github.com/cinpol/argonaut/internal/ui/components"
-	"github.com/cinpol/argonaut/internal/ui/format"
-	"github.com/cinpol/argonaut/internal/ui/styles"
+	"github.com/cinpol/siphon/internal/model"
+	"github.com/cinpol/siphon/internal/ui/components"
+	"github.com/cinpol/siphon/internal/ui/format"
+	"github.com/cinpol/siphon/internal/ui/styles"
 )
 
 // minTwoColWidth is the terminal width below which the grid collapses to a

@@ -1,4 +1,4 @@
-// Package model holds Argonaut's domain types.
+// Package model holds Siphon's domain types.
 //
 // These types are the vocabulary shared across every layer (API, business
 // logic, UI). They are deliberately transport-agnostic: nothing here knows how
@@ -41,7 +41,7 @@ type Health struct {
 // ClusterVersion identifies the Ceph release the cluster is running.
 //
 // Release/Major are parsed from Raw. They drive the version-aware decoding
-// layer: Argonaut targets a support matrix of Reef (18), Squid (19) and
+// layer: Siphon targets a support matrix of Reef (18), Squid (19) and
 // Tentacle (20), and some admin-command JSON schemas differ between them.
 type ClusterVersion struct {
 	Raw     string // full version string as reported by Ceph

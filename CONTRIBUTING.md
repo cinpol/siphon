@@ -1,6 +1,6 @@
-# Contributing to Argonaut
+# Contributing to Siphon
 
-Thanks for your interest in improving Argonaut. This guide covers how to build,
+Thanks for your interest in improving Siphon. This guide covers how to build,
 test, and submit changes.
 
 ## Ground rules
@@ -13,7 +13,7 @@ test, and submit changes.
 
 ## Development setup
 
-Argonaut is written in Go (see `go.mod` for the required version). The real,
+Siphon is written in Go (see `go.mod` for the required version). The real,
 cluster-capable build links the Ceph client libraries via cgo, so you need their
 development headers — see the README's **Requirements** section for the full
 list. In short, on Debian/Ubuntu:
@@ -26,7 +26,7 @@ You can also develop entirely against the in-memory mock, with no Ceph installed
 
 ```sh
 make build-mock                  # pure-Go binary, mock client only
-./bin/argonaut-mock --client mock
+./bin/siphon-mock --client mock
 ```
 
 ## Building and testing
@@ -41,7 +41,7 @@ make fmt       # gofmt
 CI runs `gofmt`, `go vet`, `go test` and a native (`goceph`) compile-check on
 every pull request. Please make sure these pass locally first.
 
-For how Argonaut is tested against specific Ceph releases — the build/link
+For how Siphon is tested against specific Ceph releases — the build/link
 distro matrix, golden JSON fixtures, and disposable-cluster functional runs —
 see [docs/testing.md](./docs/testing.md).
 
@@ -67,7 +67,7 @@ docs: update installation steps
 
 ## Design principles
 
-Argonaut favours simplicity, safety, maintainability and a consistent operator
+Siphon favours simplicity, safety, maintainability and a consistent operator
 experience. In particular:
 
 - Keep the layers separate: UI (`internal/ui`), business logic

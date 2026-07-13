@@ -15,8 +15,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cinpol/argonaut/internal/model"
-	"github.com/cinpol/argonaut/internal/version"
+	"github.com/cinpol/siphon/internal/model"
+	"github.com/cinpol/siphon/internal/version"
 )
 
 // healthJSON mirrors the shape Ceph uses for health information, both as the

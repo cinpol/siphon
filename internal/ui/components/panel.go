@@ -11,7 +11,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/cinpol/argonaut/internal/ui/styles"
+	"github.com/cinpol/siphon/internal/ui/styles"
 )
 
 // Panel renders a bordered box with a title and body. width and innerHeight are

@@ -8,9 +8,9 @@ import (
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/cinpol/argonaut/internal/service"
-	"github.com/cinpol/argonaut/internal/ui/components"
-	"github.com/cinpol/argonaut/internal/ui/styles"
+	"github.com/cinpol/siphon/internal/service"
+	"github.com/cinpol/siphon/internal/ui/components"
+	"github.com/cinpol/siphon/internal/ui/styles"
 )
 
 // flagKeyMap holds the cluster-flags view's bindings.

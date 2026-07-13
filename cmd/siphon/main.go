@@ -1,4 +1,4 @@
-// Command argonaut is the entrypoint for the Argonaut Ceph TUI.
+// Command siphon is the entrypoint for the Siphon Ceph TUI.
 //
 // Its only job is composition: load config, select and construct a ceph.Client,
 // wire it through the service layer into the UI, and run the Bubble Tea
@@ -12,13 +12,13 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/cinpol/argonaut/internal/ceph"
-	"github.com/cinpol/argonaut/internal/ceph/goceph"
-	"github.com/cinpol/argonaut/internal/ceph/mock"
-	"github.com/cinpol/argonaut/internal/config"
-	"github.com/cinpol/argonaut/internal/service"
-	"github.com/cinpol/argonaut/internal/ui"
-	"github.com/cinpol/argonaut/internal/version"
+	"github.com/cinpol/siphon/internal/ceph"
+	"github.com/cinpol/siphon/internal/ceph/goceph"
+	"github.com/cinpol/siphon/internal/ceph/mock"
+	"github.com/cinpol/siphon/internal/config"
+	"github.com/cinpol/siphon/internal/service"
+	"github.com/cinpol/siphon/internal/ui"
+	"github.com/cinpol/siphon/internal/version"
 )
 
 func main() {
