@@ -47,10 +47,19 @@ jobs:
       # The real (cluster-capable) build links librados/librbd via cgo, so the
       # Ceph client development headers must be present. This job doesn't need a
       # cluster — it only compile-checks that the native transport still builds.
-      - name: Install Ceph client libraries
+      - name: Install cross-compiler and Ceph client libraries
         run: |
+          sudo dpkg --add-architecture arm64
           sudo apt-get update
-          sudo apt-get install -y librados-dev librbd-dev
+          sudo apt-get install -y gcc-aarch64-linux-gnu librados-dev librbd-dev librados-dev:arm64 librbd-dev:arm64
 
-      - name: Build (goceph tag)
+      - name: Build native (goceph tag - amd64)
+        run: go build -tags goceph ./...
+
+      - name: Build cross-compile (goceph tag - arm64)
+        env:
+          CC: aarch64-linux-gnu-gcc
+          PKG_CONFIG_PATH: /usr/lib/aarch64-linux-gnu/pkgconfig
+          GOARCH: arm64
+          CGO_ENABLED: 1
         run: go build -tags goceph ./...
