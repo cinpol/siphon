@@ -26,10 +26,13 @@ jobs:
       # development headers must be present on the (amd64) runner.
       - name: Install cross-compiler and Ceph client libraries
         run: |
+          sudo apt-get update
+          # Install amd64 libraries and cross-compiler natively
+          sudo apt-get install -y gcc-aarch64-linux-gnu librados-dev librbd-dev
+          
+          # Setup apt for arm64 packages
           sudo dpkg --add-architecture arm64
-          # Configure APT to fetch arm64 packages from ports.ubuntu.com
           sudo sed -i 's/^Types: deb$/Types: deb\nArchitectures: amd64 i386/' /etc/apt/sources.list.d/ubuntu.sources || true
-          sudo sed -i 's/^deb /deb [arch=amd64,i386] /' /etc/apt/sources.list || true
           cat <<EOF | sudo tee /etc/apt/sources.list.d/ubuntu-ports.sources
           Types: deb
           Architectures: arm64
@@ -39,7 +42,12 @@ jobs:
           Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
           EOF
           sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu librados-dev librbd-dev librados-dev:arm64 librbd-dev:arm64
+          
+          # Create sysroot and extract arm64 packages manually to avoid conflicts
+          mkdir -p /tmp/arm64-sysroot
+          cd /tmp/arm64-sysroot
+          apt-get download librados-dev:arm64 librbd-dev:arm64 librados2:arm64 librbd1:arm64
+          for deb in *.deb; do dpkg -x $deb .; done
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
