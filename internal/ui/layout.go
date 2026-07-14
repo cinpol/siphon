@@ -88,7 +88,7 @@ func (m Model) frame() string {
 	if v := m.activeView(); v != nil {
 		body = v.View(innerW, innerH)
 	} else {
-		body = m.dashboardBody(innerW)
+		body = m.dashboardBody(innerW, innerH)
 	}
 	// Views composite their own popups (details/form/confirm) over the page with
 	// overlayCenter, so the shell no longer centres anything here — it just places
@@ -239,6 +239,8 @@ func (m Model) actionColumns() string {
 	var actions []Action
 	if v := m.activeView(); v != nil {
 		actions = v.actions()
+	} else {
+		actions = m.dashboardActions()
 	}
 	visible := make([]Action, 0, len(actions))
 	for _, a := range actions {

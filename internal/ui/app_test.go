@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/cinpol/siphon/internal/ceph/mock"
+	"github.com/cinpol/siphon/internal/model"
 	"github.com/cinpol/siphon/internal/service"
 )
 
@@ -55,6 +57,105 @@ func TestDashboardRendersMockCluster(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("dashboard output missing %q\n--- rendered view ---\n%s", want, out)
 		}
+	}
+}
+
+// manyChecksDashboard returns a dashboard whose health detail is far longer than
+// the inline preview budget — a busy cluster with a large backlog of pending
+// scrubs, the exact case Issue #6 is about.
+func manyChecksDashboard() *model.Dashboard {
+	details := make([]string, 40)
+	for i := range details {
+		details[i] = fmt.Sprintf("pg %d.%x not deep-scrubbed since 2026-06-01", i, i)
+	}
+	return &model.Dashboard{
+		Health: model.Health{
+			Status: model.HealthWarn,
+			Checks: []model.HealthCheck{{
+				Code:     "PG_NOT_DEEP_SCRUBBED",
+				Severity: "HEALTH_WARN",
+				Summary:  "40 pgs not deep-scrubbed in time",
+				Details:  details,
+			}},
+		},
+	}
+}
+
+// TestHealthDetailScrollableOverlay covers Issue #6: when `ceph health detail`
+// output overflows the panel, Enter opens a scrollable overlay (with visible
+// key hints), the viewport scrolls, and Esc closes it.
+func TestHealthDetailScrollableOverlay(t *testing.T) {
+	m := newTestModel(t)
+	m = fold(m, dashMsg{dash: manyChecksDashboard()})
+
+	// The inline panel truncates and points at the overlay; the header advertises
+	// the action.
+	out := m.View()
+	if !strings.Contains(out, "more — press enter to view") {
+		t.Errorf("expected a truncation hint on the dashboard:\n%s", out)
+	}
+	if !strings.Contains(out, "Health detail") {
+		t.Errorf("expected the Health-detail action hint in the header:\n%s", out)
+	}
+
+	// Enter opens the overlay and caches the static dashboard background so a
+	// burst of scroll keys doesn't rebuild the grid each frame.
+	m = fold(m, tea.KeyMsg{Type: tea.KeyEnter})
+	if !m.healthDetail {
+		t.Fatal("expected Enter to open the Health-detail overlay")
+	}
+	if m.dashBG == "" {
+		t.Error("expected the dashboard background to be cached while the overlay is open")
+	}
+	out = m.View()
+	if !strings.Contains(out, "scroll · esc close") {
+		t.Errorf("expected scroll key hints in the overlay:\n%s", out)
+	}
+	// The overlay is composited over the page, so the view must still fill the
+	// terminal exactly (footer stays docked, nothing overflows the panel).
+	if h := lipgloss.Height(out); h != 40 {
+		t.Errorf("overlay-open view height = %d, want 40 (not docked / overflowing)", h)
+	}
+
+	// The viewport starts at the top; PgDn scrolls it.
+	if off := m.healthVP.YOffset; off != 0 {
+		t.Fatalf("overlay should open at the top, got YOffset=%d", off)
+	}
+	m = fold(m, tea.KeyMsg{Type: tea.KeyPgDown})
+	if m.healthVP.YOffset == 0 {
+		t.Error("expected PgDn to scroll the health-detail viewport")
+	}
+
+	// While the overlay is open it captures input: a number key must not switch
+	// views out from under it.
+	m = fold(m, runes("2"))
+	if m.view != viewDashboard || !m.healthDetail {
+		t.Error("number keys should be captured while the overlay is open")
+	}
+
+	// Esc closes it and drops the cached background.
+	m = fold(m, tea.KeyMsg{Type: tea.KeyEsc})
+	if m.healthDetail {
+		t.Error("expected Esc to close the Health-detail overlay")
+	}
+	if m.dashBG != "" {
+		t.Error("expected the cached background to be cleared on close")
+	}
+}
+
+// TestHealthDetailNoRegressionWhenFew verifies the "no regression" acceptance
+// criterion: with only a few items the inline panel shows them in full, with no
+// truncation hint.
+func TestHealthDetailNoRegressionWhenFew(t *testing.T) {
+	m := newTestModel(t)
+	m = fold(m, m.fetchDash()()) // mock cluster: two short checks
+
+	out := m.View()
+	if strings.Contains(out, "press enter to view") {
+		t.Errorf("short health detail should not be truncated:\n%s", out)
+	}
+	if !strings.Contains(out, "osd.4 is near full") {
+		t.Errorf("expected the full detail line to be shown inline:\n%s", out)
 	}
 }
 

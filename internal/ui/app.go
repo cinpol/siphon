@@ -20,6 +20,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/cinpol/siphon/internal/model"
@@ -60,6 +61,18 @@ type Model struct {
 	dashLoading bool
 	lastSync    time.Time
 
+	// Health-detail overlay: the dashboard's `ceph health detail` section can far
+	// exceed the panel, so Enter opens this scrollable viewport over the dashboard
+	// (Esc closes). See health_detail.go.
+	healthDetail bool
+	healthVP     viewport.Model
+	// dashBG caches the rendered dashboard body while the overlay is open. The
+	// grid behind the overlay is static between refreshes, so caching it means a
+	// burst of scroll keys re-composites the (changing) overlay over a ready-made
+	// background instead of rebuilding the whole grid each frame. Refreshed on
+	// open, data refresh and resize (see loadHealthDetail); cleared on close.
+	dashBG string
+
 	// Resource views (self-contained sub-models).
 	osd      osdModel
 	pool     poolModel
@@ -95,6 +108,7 @@ func New(svc *service.Service, interval time.Duration, clientName string) Model 
 		services:    newServiceModel(svc),
 		pgs:         newPGModel(svc),
 		cmd:         ci,
+		healthVP:    viewport.New(0, 0),
 		dashLoading: true,
 	}
 }
@@ -162,6 +176,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		for _, v := range m.allViews() {
 			v.setSize(m.contentWidth(), m.contentHeight())
 		}
+		if m.healthDetail {
+			m.loadHealthDetail()
+		}
 
 	case tea.KeyMsg:
 		return m.handleKey(msg)
@@ -171,10 +188,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.dashErr = nil
 		m.dashLoading = false
 		m.lastSync = time.Now()
+		// Keep an open Health-detail overlay in step with fresh data: reload its
+		// content (the viewport preserves the scroll offset), and close it if the
+		// cluster has recovered and there is nothing left to show.
+		if m.healthDetail {
+			if m.healthDetailHasContent() {
+				m.loadHealthDetail()
+			} else {
+				m.closeHealthDetail()
+			}
+		}
 
 	case errMsg:
 		m.dashErr = msg.err
 		m.dashLoading = false
+		// Refresh the cached background so a stale banner shows behind an open
+		// overlay instead of the last cache without it.
+		if m.healthDetail {
+			m.dashBG = m.renderDashboard()
+		}
 
 	case osdsMsg, osdErrMsg:
 		var cmd tea.Cmd
@@ -255,6 +287,20 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 		return m.delegateKey(msg)
+	}
+
+	// The dashboard is not a resourceView, so its one stateful interaction — the
+	// scrollable Health-detail overlay — is handled here. While the overlay is
+	// open it captures input; otherwise Enter opens it (when there is something to
+	// show). See health_detail.go.
+	if m.view == viewDashboard {
+		if m.healthDetail {
+			return m.handleHealthDetailKey(msg)
+		}
+		if key.Matches(msg, m.keys.Enter) && m.healthDetailHasContent() {
+			m.openHealthDetail()
+			return m, nil
+		}
 	}
 
 	switch {
@@ -413,9 +459,29 @@ func (m Model) View() string {
 	return m.frame()
 }
 
-// dashboardBody renders the dashboard grid (or its loading/error states) at the
-// given width, for placement inside the workspace panel.
-func (m Model) dashboardBody(width int) string {
+// dashboardBody renders the dashboard for placement inside the workspace panel.
+// When the Health-detail overlay is open it is composited over the grid, keeping
+// the dashboard visible behind it (the same pattern the resource views use for
+// their popups). While the overlay is open the background comes from the cache
+// (dashBG) so scrolling doesn't rebuild the grid every frame; only the overlay
+// itself is re-rendered and re-composited.
+func (m Model) dashboardBody(width, height int) string {
+	if !m.healthDetail {
+		return m.renderDashboard()
+	}
+	bg := m.dashBG
+	if bg == "" {
+		// Cache miss (shouldn't normally happen while open) — render on demand.
+		bg = m.renderDashboard()
+	}
+	return overlayCenter(bg, m.healthDetailView(), width, height)
+}
+
+// renderDashboard renders the dashboard grid (or its loading/error states) at the
+// current panel width, without any overlay. It is the single place the grid is
+// built, used both directly (no overlay) and to populate the background cache.
+func (m Model) renderDashboard() string {
+	width := m.contentWidth()
 	if m.dash == nil {
 		if m.dashErr != nil {
 			return errorScreen(m.dashErr)
@@ -425,7 +491,7 @@ func (m Model) dashboardBody(width int) string {
 	body := views.Dashboard(m.dash, width)
 	if m.dashErr != nil {
 		// Keep showing the last good dashboard, with a stale banner on top.
-		return staleBanner(m.dashErr) + "\n\n" + body
+		body = staleBanner(m.dashErr) + "\n\n" + body
 	}
 	return body
 }
