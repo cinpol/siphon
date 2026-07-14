@@ -45,7 +45,7 @@ Siphon gives you:
 
 ## Features
 
-- **Dashboard** — health (with a scrollable `ceph health detail`), capacity, client IO and recovery, refreshed live.
+- **Dashboard** — health (with a scrollable `ceph health detail`), capacity (cluster-wide plus the fullest pools), client IO and recovery, refreshed live.
 - **OSDs** — mark in/out, reweight, destroy/purge/remove, metadata and utilisation.
 - **Pools** — create, edit (size/min_size/PG/autoscale/rule), delete.
 - **CRUSH** — interactive hierarchy tree; move buckets, view rules.
@@ -208,10 +208,11 @@ Optional, loaded from `~/.config/siphon/config.yaml` (honours
 
 ```yaml
 ceph:
-  config_path: ""        # empty = librados default search path
+  config_path: ""          # empty = librados default search path
   user: client.admin
 ui:
   refresh_seconds: 5
+  dashboard_pool_rows: 5   # pools shown on the dashboard (fullest first); rest → Pools view
 ```
 
 ---

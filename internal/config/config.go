@@ -40,7 +40,16 @@ type UIConfig struct {
 	// RefreshSeconds is how often the dashboard re-polls the cluster. Stored as
 	// an integer for a simple, unambiguous config file.
 	RefreshSeconds int `yaml:"refresh_seconds"`
+
+	// DashboardPoolRows is how many pools the dashboard's per-pool capacity
+	// section lists (fullest first) before truncating to a "+N more" pointer.
+	// Zero/absent means the built-in default; see DashboardPoolRows().
+	DashboardPoolRows int `yaml:"dashboard_pool_rows"`
 }
+
+// defaultDashboardPoolRows is the built-in number of pools shown on the
+// dashboard when the config does not set dashboard_pool_rows.
+const defaultDashboardPoolRows = 5
 
 // RefreshInterval returns the poll interval as a duration, falling back to a
 // sane default if the configured value is missing or invalid.
@@ -51,11 +60,22 @@ func (u UIConfig) RefreshInterval() time.Duration {
 	return time.Duration(u.RefreshSeconds) * time.Second
 }
 
+// PoolRows returns how many pools the dashboard should list, falling back to the
+// default when unset and enforcing a minimum of one. There is no upper bound —
+// a very large value simply gets clipped by the dashboard panel like any long
+// content.
+func (u UIConfig) PoolRows() int {
+	if u.DashboardPoolRows <= 0 {
+		return defaultDashboardPoolRows
+	}
+	return u.DashboardPoolRows
+}
+
 // Default returns the built-in configuration used when no file is present.
 func Default() Config {
 	return Config{
 		Ceph: CephConfig{ConfigPath: "", User: "client.admin"},
-		UI:   UIConfig{RefreshSeconds: 5},
+		UI:   UIConfig{RefreshSeconds: 5, DashboardPoolRows: defaultDashboardPoolRows},
 	}
 }
 

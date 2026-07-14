@@ -232,6 +232,12 @@ type Dashboard struct {
 	Recovery Recovery
 	Flags    []string
 
+	// Pools carries per-pool utilisation (name, %used, stored bytes) for the
+	// dashboard's capacity breakdown. Only usage fields are populated (from `df`);
+	// full pool configuration lives in the Pools view. Empty when there are no
+	// pools or the section failed to load (see Unavailable).
+	Pools []Pool
+
 	// Unavailable lists overview sections that failed to load this cycle (e.g.
 	// "capacity", "flags"). The UI renders those as unavailable rather than
 	// blanking the whole screen — one flaky sub-call shouldn't hide everything.

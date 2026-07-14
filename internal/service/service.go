@@ -71,6 +71,11 @@ func (s *Service) Dashboard(ctx context.Context) (*model.Dashboard, error) {
 	} else {
 		d.Unavailable = append(d.Unavailable, "flags")
 	}
+	if pools, err := s.client.PoolUsage(ctx); err == nil {
+		d.Pools = pools
+	} else {
+		d.Unavailable = append(d.Unavailable, "pools")
+	}
 
 	return d, nil
 }

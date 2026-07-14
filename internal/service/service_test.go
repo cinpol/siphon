@@ -26,8 +26,27 @@ func TestDashboardAggregates(t *testing.T) {
 	if len(d.Flags) == 0 {
 		t.Error("expected flags to be populated")
 	}
+	if len(d.Pools) == 0 {
+		t.Error("expected per-pool usage to be populated")
+	}
 	if len(d.Unavailable) != 0 {
 		t.Errorf("expected all sections available, got %v", d.Unavailable)
+	}
+}
+
+func TestDashboardPoolUsageFailure(t *testing.T) {
+	mc := mock.New()
+	mc.ErrPools = errors.New("df pools timed out")
+
+	d, err := New(mc).Dashboard(context.Background())
+	if err != nil {
+		t.Fatalf("dashboard should not hard-fail when pool usage fails: %v", err)
+	}
+	if d.SectionOK("pools") {
+		t.Errorf("pools should be marked unavailable: %v", d.Unavailable)
+	}
+	if len(d.Pools) != 0 {
+		t.Error("expected no pool usage when the df sub-call fails")
 	}
 }
 

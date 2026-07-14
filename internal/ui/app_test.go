@@ -25,7 +25,7 @@ func fold(m Model, msg tea.Msg) Model {
 
 func newTestModel(t *testing.T) Model {
 	t.Helper()
-	m := New(service.New(mock.New()), 5*time.Second, "mock")
+	m := New(service.New(mock.New()), 5*time.Second, 5, "mock")
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	return updated.(Model)
 }
@@ -53,6 +53,7 @@ func TestDashboardRendersMockCluster(t *testing.T) {
 		"TiB",          // formatted capacity
 		"Client IO",    // io panel
 		"noout",        // a set flag
+		"ec-rgw-data",  // per-pool capacity breakdown (fullest pool)
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("dashboard output missing %q\n--- rendered view ---\n%s", want, out)
@@ -159,6 +160,26 @@ func TestHealthDetailNoRegressionWhenFew(t *testing.T) {
 	}
 }
 
+// TestDashboardPoolRowsConfigurable verifies the configured pool-row count is
+// threaded from New() all the way to the rendered dashboard: with rows=2 the
+// mock's four pools collapse to the two fullest plus a "+2 more" pointer.
+func TestDashboardPoolRowsConfigurable(t *testing.T) {
+	m := New(service.New(mock.New()), 5*time.Second, 2, "mock")
+	m = fold(m, tea.WindowSizeMsg{Width: 100, Height: 40})
+	m = fold(m, m.fetchDash()())
+
+	out := m.View()
+	if !strings.Contains(out, "ec-rgw-data") || !strings.Contains(out, "cephfs_data") {
+		t.Errorf("expected the two fullest pools with rows=2:\n%s", out)
+	}
+	if strings.Contains(out, "rbd  ") { // the 3rd-fullest pool should be truncated away
+		t.Errorf("rows=2 should not show a third pool row:\n%s", out)
+	}
+	if !strings.Contains(out, "+2 more pools — press 3 for Pools") {
+		t.Errorf("expected a '+2 more pools' pointer with rows=2:\n%s", out)
+	}
+}
+
 // TestSwitchToOSDView verifies the `2` hotkey switches views and the OSD table
 // renders the mock OSDs.
 func TestSwitchToOSDView(t *testing.T) {
@@ -255,7 +276,7 @@ func TestSwitchToCrushView(t *testing.T) {
 // than blanking.
 func TestStaleDataOnRefreshError(t *testing.T) {
 	mc := mock.New()
-	m := New(service.New(mc), 5*time.Second, "mock")
+	m := New(service.New(mc), 5*time.Second, 5, "mock")
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = updated.(Model)
 
@@ -337,7 +358,7 @@ func TestOpErrorClearsOnRefresh(t *testing.T) {
 // service via y/N, checking the orchestrator command is dispatched.
 func TestServiceDrillAndRestart(t *testing.T) {
 	mc := mock.New()
-	m := New(service.New(mc), 5*time.Second, "mock")
+	m := New(service.New(mc), 5*time.Second, 5, "mock")
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = updated.(Model)
 
@@ -385,7 +406,7 @@ func TestServiceDrillAndRestart(t *testing.T) {
 // dispatched and the flag is now set after refresh.
 func TestFlagToggleFlow(t *testing.T) {
 	mc := mock.New()
-	m := New(service.New(mc), 5*time.Second, "mock")
+	m := New(service.New(mc), 5*time.Second, 5, "mock")
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = updated.(Model)
 
@@ -434,7 +455,7 @@ func TestFlagToggleFlow(t *testing.T) {
 // destination rack, confirm, and verify the mock CRUSH map reflects the move.
 func TestCrushMoveFlow(t *testing.T) {
 	mc := mock.New()
-	m := New(service.New(mc), 5*time.Second, "mock")
+	m := New(service.New(mc), 5*time.Second, 5, "mock")
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = updated.(Model)
 
@@ -494,7 +515,7 @@ func TestCrushMoveFlow(t *testing.T) {
 // appears after refresh.
 func TestPoolCreateFlow(t *testing.T) {
 	mc := mock.New()
-	m := New(service.New(mc), 5*time.Second, "mock")
+	m := New(service.New(mc), 5*time.Second, 5, "mock")
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = updated.(Model)
 
@@ -579,7 +600,7 @@ func runes(s string) tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyRunes, Runes: [
 // correct command reached the cluster and the OSD's state updated on refresh.
 func TestOSDOutOperationFlow(t *testing.T) {
 	mc := mock.New()
-	m := New(service.New(mc), 5*time.Second, "mock")
+	m := New(service.New(mc), 5*time.Second, 5, "mock")
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = updated.(Model)
 
@@ -636,7 +657,7 @@ func TestOSDOutOperationFlow(t *testing.T) {
 // mapping — and (c) Esc restores the full list.
 func TestOSDFilterFlow(t *testing.T) {
 	mc := mock.New()
-	m := New(service.New(mc), 5*time.Second, "mock")
+	m := New(service.New(mc), 5*time.Second, 5, "mock")
 	m = fold(m, tea.WindowSizeMsg{Width: 100, Height: 24})
 	m = fold(m, runes("2"))
 	m = fold(m, m.osd.fetch()())
@@ -705,7 +726,7 @@ func TestFooterDockedAtBottom(t *testing.T) {
 	}
 	for _, s := range sizes {
 		t.Run(s.name, func(t *testing.T) {
-			m := New(service.New(mock.New()), 5*time.Second, "mock")
+			m := New(service.New(mock.New()), 5*time.Second, 5, "mock")
 			m = fold(m, tea.WindowSizeMsg{Width: s.w, Height: s.h})
 			m = fold(m, m.fetchDash()())
 

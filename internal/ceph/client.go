@@ -55,6 +55,12 @@ type Client interface {
 	// utilisation (composed from `osd dump`, `df` and `osd crush rule dump`).
 	Pools(ctx context.Context) ([]model.Pool, error)
 
+	// PoolUsage returns per-pool utilisation only (name, %used, stored bytes,
+	// objects) from the `df` command — the lightweight subset the dashboard needs
+	// for its capacity breakdown, without the osd dump / crush rule calls that
+	// Pools makes.
+	PoolUsage(ctx context.Context) ([]model.Pool, error)
+
 	// CrushTree returns the CRUSH hierarchy as a flat list of nodes with child
 	// ids (from `osd crush tree`).
 	CrushTree(ctx context.Context) ([]model.CrushNode, error)

@@ -51,6 +51,7 @@ type Model struct {
 	svc        *service.Service
 	interval   time.Duration
 	clientName string
+	poolRows   int // how many pools the dashboard lists (from config)
 	keys       keyMap
 
 	view viewID
@@ -91,7 +92,8 @@ type Model struct {
 
 // New constructs the root model. clientName is shown in the header so the
 // operator can see whether they are looking at a live cluster or the mock.
-func New(svc *service.Service, interval time.Duration, clientName string) Model {
+// poolRows is how many pools the dashboard lists (resolved from config).
+func New(svc *service.Service, interval time.Duration, poolRows int, clientName string) Model {
 	ci := textinput.New()
 	ci.Prompt = ":"
 	ci.CharLimit = 32
@@ -100,6 +102,7 @@ func New(svc *service.Service, interval time.Duration, clientName string) Model 
 		svc:         svc,
 		interval:    interval,
 		clientName:  clientName,
+		poolRows:    poolRows,
 		keys:        defaultKeys(),
 		osd:         newOSDModel(svc),
 		pool:        newPoolModel(svc),
@@ -488,7 +491,7 @@ func (m Model) renderDashboard() string {
 		}
 		return styles.Faint.Render("Loading cluster status…")
 	}
-	body := views.Dashboard(m.dash, width)
+	body := views.Dashboard(m.dash, width, m.poolRows)
 	if m.dashErr != nil {
 		// Keep showing the last good dashboard, with a stale banner on top.
 		body = staleBanner(m.dashErr) + "\n\n" + body

@@ -222,6 +222,24 @@ func (c *Client) Pools(ctx context.Context) ([]model.Pool, error) {
 	return append([]model.Pool(nil), c.pools...), nil
 }
 
+// PoolUsage returns only the utilisation subset of the mock pools, mirroring the
+// real client's df-only path (the dashboard reads just these fields).
+func (c *Client) PoolUsage(ctx context.Context) ([]model.Pool, error) {
+	if c.ErrPools != nil {
+		return nil, c.ErrPools
+	}
+	usage := make([]model.Pool, len(c.pools))
+	for i, p := range c.pools {
+		usage[i] = model.Pool{
+			Name:        p.Name,
+			UsedRatio:   p.UsedRatio,
+			StoredBytes: p.StoredBytes,
+			Objects:     p.Objects,
+		}
+	}
+	return usage, nil
+}
+
 func (c *Client) CrushTree(ctx context.Context) ([]model.CrushNode, error) {
 	return append([]model.CrushNode(nil), c.crush...), nil
 }
