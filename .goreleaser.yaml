@@ -79,7 +79,7 @@ changelog:
 release:
   github:
     owner: sulaimantok
-    name: siphon
+    name: argonaut
   # Create the release as a draft so you can review the artifacts and notes
   # before publishing. Pre-release tags (e.g. v0.1.0-rc1) are marked automatically.
   draft: true
