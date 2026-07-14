@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -167,6 +168,28 @@ func (c *Client) Pools(ctx context.Context) ([]model.Pool, error) {
 		}
 	}
 
+	return pools, nil
+}
+
+// PoolUsage returns per-pool utilisation from `df` alone — the lightweight subset
+// the dashboard needs, avoiding the osd dump / crush rule dump calls Pools makes.
+func (c *Client) PoolUsage(ctx context.Context) ([]model.Pool, error) {
+	out, err := c.monCommand(map[string]any{"prefix": "df", "format": "json"})
+	if err != nil {
+		return nil, err
+	}
+	usage, err := decode.PoolUsage(out)
+	if err != nil {
+		return nil, err
+	}
+	pools := make([]model.Pool, 0, len(usage))
+	for name, u := range usage {
+		u.Name = name
+		pools = append(pools, u)
+	}
+	// df returns pools in an unspecified order; sort by name for a stable result
+	// (the dashboard re-sorts by %used for display).
+	sort.Slice(pools, func(i, j int) bool { return pools[i].Name < pools[j].Name })
 	return pools, nil
 }
 

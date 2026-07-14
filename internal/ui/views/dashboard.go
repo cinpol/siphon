@@ -7,6 +7,7 @@ package views
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -26,7 +27,9 @@ const minTwoColWidth = 64
 const panelInnerHeight = 3
 
 // Dashboard renders the cluster overview as a responsive grid of panels.
-func Dashboard(d *model.Dashboard, width int) string {
+// poolRows is how many pools the per-pool capacity section lists before
+// truncating (resolved from config, already defaulted/floored by the caller).
+func Dashboard(d *model.Dashboard, width, poolRows int) string {
 	if width < 20 {
 		width = 20
 	}
@@ -78,9 +81,88 @@ func Dashboard(d *model.Dashboard, width int) string {
 	if detail := healthDetailPanel(d.Health, flagsWidth); detail != "" {
 		sections = append(sections, detail)
 	}
+	// Per-pool capacity breakdown (top pools by fullness). Shown as a full-width
+	// section like health detail; unavailable if the df sub-call failed, omitted
+	// entirely when the cluster has no pools.
+	if !d.SectionOK("pools") {
+		sections = append(sections, components.Panel("Pools", unavailableBody(), flagsWidth, 1))
+	} else if pools := poolCapacityPanel(d.Pools, flagsWidth, poolRows); pools != "" {
+		sections = append(sections, pools)
+	}
 	sections = append(sections, flags)
 
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
+}
+
+// poolCapacityPanel renders the top pools by fullness so "which pool is filling
+// up?" is answerable at a glance: each row is name · stored · a utilisation
+// meter · %used, sorted %used-descending. It lists at most rows pools (from
+// config); when there are more it appends a "+N more — press 3 for Pools"
+// pointer to the full Pools view (no scrolling here, no duplication of that
+// view). Returns "" for a cluster with no pools.
+func poolCapacityPanel(pools []model.Pool, width, rows int) string {
+	if len(pools) == 0 {
+		return ""
+	}
+	if rows < 1 {
+		rows = 1 // defensive: caller already defaults/floors, but never show zero
+	}
+	sorted := append([]model.Pool(nil), pools...)
+	sort.Slice(sorted, func(i, j int) bool {
+		if sorted[i].UsedRatio != sorted[j].UsedRatio {
+			return sorted[i].UsedRatio > sorted[j].UsedRatio
+		}
+		return sorted[i].Name < sorted[j].Name // stable tiebreak
+	})
+
+	shown := sorted
+	if len(shown) > rows {
+		shown = shown[:rows]
+	}
+
+	// Name column: as wide as the widest shown name, capped so long names don't
+	// crowd out the meter and floored for consistent alignment.
+	nameW := 0
+	for _, p := range shown {
+		if n := len(p.Name); n > nameW {
+			nameW = n
+		}
+	}
+	switch {
+	case nameW > 24:
+		nameW = 24
+	case nameW < 8:
+		nameW = 8
+	}
+
+	lines := make([]string, 0, rows+1)
+	for _, p := range shown {
+		lines = append(lines, poolRow(p, nameW))
+	}
+	if len(sorted) > rows {
+		hidden := len(sorted) - rows
+		noun := "pools"
+		if hidden == 1 {
+			noun = "pool"
+		}
+		lines = append(lines, styles.Faint.Render(fmt.Sprintf("+%d more %s — press 3 for Pools", hidden, noun)))
+	}
+	return components.Panel("Pools", strings.Join(lines, "\n"), width, len(lines))
+}
+
+// poolRow renders one pool line: name (left, truncated to nameW), stored bytes
+// (right-aligned), a utilisation meter, and %used coloured by fullness.
+func poolRow(p model.Pool, nameW int) string {
+	name := p.Name
+	if len(name) > nameW {
+		name = name[:nameW-1] + "…"
+	}
+	return fmt.Sprintf("%-*s  %9s  %s  %s",
+		nameW, name,
+		format.Bytes(p.StoredBytes),
+		components.Meter(p.UsedRatio, 12),
+		styles.Utilization(p.UsedRatio).Render(fmt.Sprintf("%4s", format.Percent(p.UsedRatio))),
+	)
 }
 
 // healthPreviewLines caps how many health-detail lines the dashboard shows

@@ -49,7 +49,7 @@ func main() {
 	defer client.Close()
 
 	svc := service.New(client)
-	model := ui.New(svc, cfg.UI.RefreshInterval(), clientName)
+	model := ui.New(svc, cfg.UI.RefreshInterval(), cfg.UI.PoolRows(), clientName)
 
 	program := tea.NewProgram(model, tea.WithAltScreen())
 	if _, err := program.Run(); err != nil {
