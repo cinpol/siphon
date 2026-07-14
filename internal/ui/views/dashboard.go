@@ -83,21 +83,49 @@ func Dashboard(d *model.Dashboard, width int) string {
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
 }
 
-// healthDetailPanel renders the expanded, full-width health section shown when
-// the cluster has active checks. Each check contributes its code + severity, its
-// one-line summary, and any per-item detail lines from `ceph health detail`. It
-// returns "" for a healthy cluster (no checks), so the section only appears when
-// there is something to show.
-func healthDetailPanel(h model.Health, width int) string {
-	if len(h.Checks) == 0 {
-		return ""
+// healthPreviewLines caps how many health-detail lines the dashboard shows
+// inline. Real clusters can emit hundreds of detail items (e.g. a backlog of
+// pending scrubs during recovery); rendering them all would overflow the panel
+// and push the Flags section off-screen. When the output is longer than this
+// budget the inline panel shows a preview and a hint, and the full text lives in
+// the scrollable Health-detail overlay (Enter). This keeps the dashboard a
+// bounded overview regardless of cluster size.
+const healthPreviewLines = 8
+
+// HealthDetailLines renders the full `ceph health detail` content as styled
+// lines: for each active check its code + severity, its one-line summary, and
+// each per-item detail line. It is the single source of truth for both the
+// inline dashboard preview and the scrollable Health-detail overlay, so the two
+// can never drift apart.
+func HealthDetailLines(h model.Health) []string {
+	lines, _ := healthLines(h, 0)
+	return lines
+}
+
+// healthLines builds the health-detail lines, styling at most limit of them
+// (limit <= 0 means all) while always returning the true total count. The limit
+// lets the dashboard's inline preview avoid styling hundreds of detail lines it
+// will never show: on a busy cluster the panel needs only the first few lines
+// plus a count, and this is re-rendered on every frame, so styling the whole
+// backlog each time was pure waste. The overlay asks for all lines (limit 0),
+// but its content is set only when it opens/refreshes, not per keystroke.
+func healthLines(h model.Health, limit int) (lines []string, total int) {
+	// add records one line, styling it only while we are still under the limit.
+	// build is a closure so the (possibly expensive) styling isn't evaluated for
+	// lines beyond the limit — it is only called when the line will be kept.
+	add := func(build func() string) {
+		total++
+		if limit <= 0 || len(lines) < limit {
+			lines = append(lines, build())
+		}
 	}
-	var lines []string
 	for _, c := range h.Checks {
-		marker := styles.Health(model.HealthStatus(c.Severity)).Render("●")
-		lines = append(lines, fmt.Sprintf("%s %s  %s", marker, c.Code, styles.Faint.Render("("+c.Severity+")")))
+		add(func() string {
+			marker := styles.Health(model.HealthStatus(c.Severity)).Render("●")
+			return fmt.Sprintf("%s %s  %s", marker, c.Code, styles.Faint.Render("("+c.Severity+")"))
+		})
 		if c.Summary != "" {
-			lines = append(lines, "    "+c.Summary)
+			add(func() string { return "    " + c.Summary })
 		}
 		for _, d := range c.Details {
 			// Some checks repeat the summary verbatim as their only detail
@@ -105,8 +133,29 @@ func healthDetailPanel(h model.Health, width int) string {
 			if d == c.Summary {
 				continue
 			}
-			lines = append(lines, styles.Faint.Render("      "+d))
+			add(func() string { return styles.Faint.Render("      " + d) })
 		}
+	}
+	return lines, total
+}
+
+// healthDetailPanel renders the expanded, full-width health section shown when
+// the cluster has active checks. It returns "" for a healthy cluster (no
+// checks), so the section only appears when there is something to show. When the
+// content exceeds healthPreviewLines it is truncated to a preview with a hint
+// pointing at the scrollable overlay; short output is shown in full (so there is
+// no regression when there are only a few items).
+func healthDetailPanel(h model.Health, width int) string {
+	if len(h.Checks) == 0 {
+		return ""
+	}
+	// Style at most healthPreviewLines; total is the full count (used for the
+	// "+N more" hint) but costs nothing beyond the budget.
+	lines, total := healthLines(h, healthPreviewLines)
+	if total > healthPreviewLines {
+		hidden := total - (healthPreviewLines - 1)
+		lines = append(lines[:healthPreviewLines-1:healthPreviewLines-1],
+			styles.Faint.Render(fmt.Sprintf("      +%d more — press enter to view", hidden)))
 	}
 	return components.Panel("Health detail", strings.Join(lines, "\n"), width, len(lines))
 }

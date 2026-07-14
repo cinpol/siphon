@@ -17,6 +17,7 @@ type keyMap struct {
 	Command   key.Binding
 	Help      key.Binding
 	Quit      key.Binding
+	Enter     key.Binding // dashboard: opens the scrollable Health-detail overlay
 }
 
 func defaultKeys() keyMap {
@@ -52,6 +53,10 @@ func defaultKeys() keyMap {
 		Command: key.NewBinding(
 			key.WithKeys(":"),
 			key.WithHelp(":", "command"),
+		),
+		Enter: key.NewBinding(
+			key.WithKeys("enter"),
+			key.WithHelp("enter", "health detail"),
 		),
 		Help: key.NewBinding(
 			key.WithKeys("?"),

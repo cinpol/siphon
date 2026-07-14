@@ -45,7 +45,7 @@ Siphon gives you:
 
 ## Features
 
-- **Dashboard** — health (with full `ceph health detail`), capacity, client IO and recovery, refreshed live.
+- **Dashboard** — health (with a scrollable `ceph health detail`), capacity, client IO and recovery, refreshed live.
 - **OSDs** — mark in/out, reweight, destroy/purge/remove, metadata and utilisation.
 - **Pools** — create, edit (size/min_size/PG/autoscale/rule), delete.
 - **CRUSH** — interactive hierarchy tree; move buckets, view rules.
@@ -194,7 +194,9 @@ to explicitly run against the built-in demo cluster.
 
 - `1`–`7` — switch views; `:` — command prompt (e.g. `:osd`)
 - `/` — filter the current table live
-- `Enter` — details for the selected item; context actions use the shortcut keys shown in the header
+- `Enter` — details for the selected item; on the Dashboard it opens a scrollable
+  `ceph health detail`. Context actions use the shortcut keys shown in the header
+- Inside the Health-detail overlay: `↑`/`↓`, `PgUp`/`PgDn`, `g`/`G` scroll; `Esc` closes
 - `q` — quit
 
 ---
