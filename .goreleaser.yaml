@@ -12,7 +12,7 @@ version: 2
 project_name: siphon
 
 builds:
-  - id: siphon
+  - id: siphon-amd64
     main: ./cmd/siphon
     binary: siphon
     env:
@@ -23,6 +23,27 @@ builds:
       - linux
     goarch:
       - amd64
+    ldflags:
+      - -s -w
+      - -X github.com/cinpol/siphon/internal/version.Version={{ .Version }}
+      - -X github.com/cinpol/siphon/internal/version.Commit={{ .ShortCommit }}
+      - -X github.com/cinpol/siphon/internal/version.Date={{ .Date }}
+
+  - id: siphon-arm64
+    main: ./cmd/siphon
+    binary: siphon
+    env:
+      - CGO_ENABLED=1
+      - CC=aarch64-linux-gnu-gcc
+      - PKG_CONFIG_PATH=/tmp/arm64-sysroot/usr/lib/aarch64-linux-gnu/pkgconfig
+      - CGO_CFLAGS=-I/tmp/arm64-sysroot/usr/include
+      - CGO_LDFLAGS=-L/tmp/arm64-sysroot/usr/lib/aarch64-linux-gnu -Wl,--allow-shlib-undefined -Wl,-rpath-link=/tmp/arm64-sysroot/usr/lib/aarch64-linux-gnu
+    tags:
+      - goceph
+    goos:
+      - linux
+    goarch:
+      - arm64
     ldflags:
       - -s -w
       - -X github.com/cinpol/siphon/internal/version.Version={{ .Version }}

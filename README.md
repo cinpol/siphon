@@ -97,8 +97,8 @@ siphon --version
 sudo siphon          # --client auto
 ```
 
-`arm64` and other package channels (Homebrew, deb/rpm) are planned for later
-releases — until then, other platforms build from source.
+Package channels (Homebrew, deb/rpm) are planned for later releases.
+Other platforms build from source.
 
 ### Build from source
 
@@ -133,7 +133,7 @@ make build-mock
 | Platform | Status | Notes |
 |----------|:------:|-------|
 | Linux `amd64` | ✅ | Prebuilt binaries; the primary tested target. |
-| Linux `arm64` | ⚠️ | Should build from source; prebuilt binaries are planned and it is not yet tested. |
+| Linux `arm64` | ✅ | Prebuilt binaries available via cross-compilation pipeline. |
 | macOS / Windows | ❌ | librados is not available; only the mock client runs, for development/demos. |
 
 ### Ceph releases
