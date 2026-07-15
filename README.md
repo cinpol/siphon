@@ -213,6 +213,12 @@ ceph:
 ui:
   refresh_seconds: 5
   dashboard_pool_rows: 5   # pools shown on the dashboard (fullest first); rest → Pools view
+  # pg_problem_flags:      # PG state flags the "problems only" (u) filter treats as problems.
+  #   - inconsistent       # Omit the whole key to use these built-in defaults; setting it
+  #   - snaptrim_error     # replaces the list entirely.
+  #   - failed_repair
+  #   - unfound
+  #   - stale
 ```
 
 ---

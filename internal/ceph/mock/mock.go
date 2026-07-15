@@ -154,6 +154,7 @@ func New() *Client {
 				{ID: "2.a", State: "active+remapped+backfilling", Up: []int{2, 3, 4}, UpPrimary: 2, Acting: []int{2, 3}, ActingPrimary: 2, Objects: 401, Bytes: 1_050_000_000, LastScrub: "2026-07-03T18:02:00", LastDeepScrub: "2026-06-28T10:15:00"},
 				{ID: "2.b", State: "active+clean+scrubbing", Up: []int{0, 1, 3}, UpPrimary: 0, Acting: []int{0, 1, 3}, ActingPrimary: 0, Objects: 377, Bytes: 990_000_000, LastScrub: "2026-07-05T06:00:00", LastDeepScrub: "2026-06-30T12:00:00"},
 				{ID: "2.14", State: "active+undersized+degraded", Up: []int{1, 2}, UpPrimary: 1, Acting: []int{1, 2}, ActingPrimary: 1, Objects: 366, Bytes: 900_000_000, LastScrub: "2026-07-02T11:31:00", LastDeepScrub: "2026-06-27T09:44:00"},
+				{ID: "2.1f", State: "active+clean+inconsistent", Up: []int{0, 3, 4}, UpPrimary: 0, Acting: []int{0, 3, 4}, ActingPrimary: 0, Objects: 402, Bytes: 1_060_000_000, LastScrub: "2026-07-04T09:12:00", LastDeepScrub: "2026-06-30T03:20:00"},
 			},
 			"cephfs_data": {
 				{ID: "3.0", State: "active+clean", Up: []int{2, 4, 0}, UpPrimary: 2, Acting: []int{2, 4, 0}, ActingPrimary: 2, Objects: 1500, Bytes: 6_442_450_944, LastScrub: "2026-07-04T04:00:00", LastDeepScrub: "2026-06-29T04:00:00"},
