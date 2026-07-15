@@ -19,6 +19,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/cinpol/siphon/internal/model"
 )
 
 // Config is the root of Siphon's application configuration.
@@ -45,6 +47,11 @@ type UIConfig struct {
 	// section lists (fullest first) before truncating to a "+N more" pointer.
 	// Zero/absent means the built-in default; see DashboardPoolRows().
 	DashboardPoolRows int `yaml:"dashboard_pool_rows"`
+
+	// PGProblemFlags optionally overrides which PG state flags the PGs view's
+	// "problems only" filter treats as problems. Empty/absent means the built-in
+	// default (model.DefaultPGProblemFlags); see ProblemFlags().
+	PGProblemFlags []string `yaml:"pg_problem_flags"`
 }
 
 // defaultDashboardPoolRows is the built-in number of pools shown on the
@@ -69,6 +76,16 @@ func (u UIConfig) PoolRows() int {
 		return defaultDashboardPoolRows
 	}
 	return u.DashboardPoolRows
+}
+
+// ProblemFlags returns the PG "problem" flag list, falling back to the built-in
+// default when the config does not set it. Setting ui.pg_problem_flags replaces
+// the default list entirely (it is not merged).
+func (u UIConfig) ProblemFlags() []string {
+	if len(u.PGProblemFlags) == 0 {
+		return model.DefaultPGProblemFlags
+	}
+	return u.PGProblemFlags
 }
 
 // Default returns the built-in configuration used when no file is present.

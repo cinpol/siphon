@@ -218,10 +218,10 @@ func TestPGs(t *testing.T) {
 		if len(pgs) != 2 {
 			t.Fatalf("got %d PGs, want 2", len(pgs))
 		}
-		if pgs[0].ID != "2.0" || !pgs[0].Healthy() || pgs[0].Objects != 412 {
+		if pgs[0].ID != "2.0" || !pgs[0].Healthy(model.DefaultPGProblemFlags) || pgs[0].Objects != 412 {
 			t.Errorf("unexpected pg 2.0: %+v", pgs[0])
 		}
-		if pgs[1].Healthy() { // remapped+backfilling
+		if pgs[1].Healthy(model.DefaultPGProblemFlags) { // remapped+backfilling
 			t.Error("2.a should not be healthy")
 		}
 		if len(pgs[1].Acting) != 2 {

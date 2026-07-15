@@ -57,6 +57,7 @@ type pgModel struct {
 	filterInput  textinput.Model
 	filtering    bool
 	problemsOnly bool
+	problemFlags []string // PG state flags treated as problems (config-resolved)
 	detail       bool
 
 	confirming bool
@@ -70,7 +71,7 @@ type pgModel struct {
 	height  int
 }
 
-func newPGModel(svc *service.Service) pgModel {
+func newPGModel(svc *service.Service, problemFlags []string) pgModel {
 	t := table.New(table.WithColumns(pgColumns()), table.WithFocused(true))
 	t.SetStyles(osdTableStyles())
 
@@ -78,7 +79,7 @@ func newPGModel(svc *service.Service) pgModel {
 	fi.Prompt = "/"
 	fi.CharLimit = 32
 
-	return pgModel{svc: svc, keys: defaultPGKeys(), table: t, filterInput: fi, loading: true}
+	return pgModel{svc: svc, keys: defaultPGKeys(), table: t, filterInput: fi, problemFlags: problemFlags, loading: true}
 }
 
 type (
@@ -260,7 +261,7 @@ func (m *pgModel) rebuild() {
 	filter := strings.ToLower(strings.TrimSpace(m.filter))
 	m.visible = m.visible[:0]
 	for _, pg := range m.pgs {
-		if m.problemsOnly && pg.Healthy() {
+		if m.problemsOnly && pg.Healthy(m.problemFlags) {
 			continue
 		}
 		if filter != "" && !strings.Contains(strings.ToLower(pg.ID), filter) && !strings.Contains(strings.ToLower(pg.State), filter) {

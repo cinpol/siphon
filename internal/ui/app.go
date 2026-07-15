@@ -92,8 +92,9 @@ type Model struct {
 
 // New constructs the root model. clientName is shown in the header so the
 // operator can see whether they are looking at a live cluster or the mock.
-// poolRows is how many pools the dashboard lists (resolved from config).
-func New(svc *service.Service, interval time.Duration, poolRows int, clientName string) Model {
+// poolRows is how many pools the dashboard lists and problemFlags is the PG
+// "problems only" flag list — both resolved from config.
+func New(svc *service.Service, interval time.Duration, poolRows int, problemFlags []string, clientName string) Model {
 	ci := textinput.New()
 	ci.Prompt = ":"
 	ci.CharLimit = 32
@@ -109,7 +110,7 @@ func New(svc *service.Service, interval time.Duration, poolRows int, clientName 
 		crush:       newCrushModel(svc),
 		flags:       newFlagModel(svc),
 		services:    newServiceModel(svc),
-		pgs:         newPGModel(svc),
+		pgs:         newPGModel(svc, problemFlags),
 		cmd:         ci,
 		healthVP:    viewport.New(0, 0),
 		dashLoading: true,

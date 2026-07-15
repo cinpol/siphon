@@ -217,8 +217,39 @@ type PG struct {
 	LastDeepScrub string
 }
 
-// Healthy reports whether the PG is in a clean state.
-func (p PG) Healthy() bool { return strings.Contains(p.State, "active+clean") }
+// DefaultPGProblemFlags is the built-in set of error flags Ceph appends to an
+// otherwise clean PG state (e.g. "active+clean+inconsistent"). They mean the PG
+// needs attention even though it is still active+clean, so Healthy must not be
+// fooled by the surrounding "active+clean" substring. Benign appended flags
+// (scrubbing, deep, snaptrim) are deliberately absent — a normal scrub/snaptrim
+// is not a problem. This is the default; operators can override the list via
+// config (ui.pg_problem_flags), which is threaded to Healthy by the caller.
+var DefaultPGProblemFlags = []string{
+	"inconsistent",   // deep scrub found a replica mismatch
+	"snaptrim_error", // error trimming a snapshot
+	"failed_repair",  // a repair could not fix the inconsistency
+	"unfound",        // objects the cluster cannot locate
+	"stale",          // primary hasn't reported (often OSDs down) — status unknown
+}
+
+// Healthy reports whether the PG is in a clean state with no error flag. A PG is
+// healthy only if it is active+clean and carries none of problemFlags: Ceph
+// appends flags like "inconsistent" to a clean state, so a bare substring check
+// for "active+clean" would wrongly report those as healthy (and hide them from
+// the PGs view's "problems only" filter). problemFlags is supplied by the caller
+// (config-resolved, defaulting to DefaultPGProblemFlags) so the classification
+// can be tuned without changing this logic.
+func (p PG) Healthy(problemFlags []string) bool {
+	if !strings.Contains(p.State, "active+clean") {
+		return false
+	}
+	for _, flag := range problemFlags {
+		if strings.Contains(p.State, flag) {
+			return false
+		}
+	}
+	return true
+}
 
 // Dashboard is the aggregate the overview screen renders. The service layer
 // composes it from several cluster calls so the UI has a single, coherent

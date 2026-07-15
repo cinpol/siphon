@@ -25,7 +25,7 @@ func fold(m Model, msg tea.Msg) Model {
 
 func newTestModel(t *testing.T) Model {
 	t.Helper()
-	m := New(service.New(mock.New()), 5*time.Second, 5, "mock")
+	m := New(service.New(mock.New()), 5*time.Second, 5, model.DefaultPGProblemFlags, "mock")
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	return updated.(Model)
 }
@@ -164,7 +164,7 @@ func TestHealthDetailNoRegressionWhenFew(t *testing.T) {
 // threaded from New() all the way to the rendered dashboard: with rows=2 the
 // mock's four pools collapse to the two fullest plus a "+2 more" pointer.
 func TestDashboardPoolRowsConfigurable(t *testing.T) {
-	m := New(service.New(mock.New()), 5*time.Second, 2, "mock")
+	m := New(service.New(mock.New()), 5*time.Second, 2, model.DefaultPGProblemFlags, "mock")
 	m = fold(m, tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = fold(m, m.fetchDash()())
 
@@ -276,7 +276,7 @@ func TestSwitchToCrushView(t *testing.T) {
 // than blanking.
 func TestStaleDataOnRefreshError(t *testing.T) {
 	mc := mock.New()
-	m := New(service.New(mc), 5*time.Second, 5, "mock")
+	m := New(service.New(mc), 5*time.Second, 5, model.DefaultPGProblemFlags, "mock")
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = updated.(Model)
 
@@ -309,18 +309,29 @@ func TestPGProblemsToggleAndFilter(t *testing.T) {
 	svc := service.New(mock.New())
 	pgs, _ := svc.PGsByPool(context.Background(), "rbd")
 
-	pm := newPGModel(svc)
+	pm := newPGModel(svc, model.DefaultPGProblemFlags)
 	updated, _ := pm.Update(pgsMsg{pgs: pgs})
 	pm = updated
-	if len(pm.visible) != 5 {
-		t.Fatalf("want 5 visible PGs, got %d", len(pm.visible))
+	if len(pm.visible) != 6 {
+		t.Fatalf("want 6 visible PGs, got %d", len(pm.visible))
 	}
 
-	// Problems only -> the two non-active+clean PGs.
+	// Problems only -> the three unhealthy PGs: remapped+backfilling,
+	// undersized+degraded, and the active+clean+inconsistent one (which must not
+	// be treated as healthy just because its state contains "active+clean").
 	updated, _ = pm.Update(runes("u"))
 	pm = updated
-	if len(pm.visible) != 2 {
-		t.Errorf("problems-only want 2, got %d", len(pm.visible))
+	if len(pm.visible) != 3 {
+		t.Errorf("problems-only want 3, got %d", len(pm.visible))
+	}
+	var sawInconsistent bool
+	for _, pg := range pm.visible {
+		if pg.ID == "2.1f" {
+			sawInconsistent = true
+		}
+	}
+	if !sawInconsistent {
+		t.Errorf("problems-only should include the inconsistent PG 2.1f, got %+v", pm.visible)
 	}
 
 	// Back to all, then filter by "degraded" -> one PG.
@@ -358,7 +369,7 @@ func TestOpErrorClearsOnRefresh(t *testing.T) {
 // service via y/N, checking the orchestrator command is dispatched.
 func TestServiceDrillAndRestart(t *testing.T) {
 	mc := mock.New()
-	m := New(service.New(mc), 5*time.Second, 5, "mock")
+	m := New(service.New(mc), 5*time.Second, 5, model.DefaultPGProblemFlags, "mock")
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = updated.(Model)
 
@@ -406,7 +417,7 @@ func TestServiceDrillAndRestart(t *testing.T) {
 // dispatched and the flag is now set after refresh.
 func TestFlagToggleFlow(t *testing.T) {
 	mc := mock.New()
-	m := New(service.New(mc), 5*time.Second, 5, "mock")
+	m := New(service.New(mc), 5*time.Second, 5, model.DefaultPGProblemFlags, "mock")
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = updated.(Model)
 
@@ -455,7 +466,7 @@ func TestFlagToggleFlow(t *testing.T) {
 // destination rack, confirm, and verify the mock CRUSH map reflects the move.
 func TestCrushMoveFlow(t *testing.T) {
 	mc := mock.New()
-	m := New(service.New(mc), 5*time.Second, 5, "mock")
+	m := New(service.New(mc), 5*time.Second, 5, model.DefaultPGProblemFlags, "mock")
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = updated.(Model)
 
@@ -515,7 +526,7 @@ func TestCrushMoveFlow(t *testing.T) {
 // appears after refresh.
 func TestPoolCreateFlow(t *testing.T) {
 	mc := mock.New()
-	m := New(service.New(mc), 5*time.Second, 5, "mock")
+	m := New(service.New(mc), 5*time.Second, 5, model.DefaultPGProblemFlags, "mock")
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = updated.(Model)
 
@@ -600,7 +611,7 @@ func runes(s string) tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyRunes, Runes: [
 // correct command reached the cluster and the OSD's state updated on refresh.
 func TestOSDOutOperationFlow(t *testing.T) {
 	mc := mock.New()
-	m := New(service.New(mc), 5*time.Second, 5, "mock")
+	m := New(service.New(mc), 5*time.Second, 5, model.DefaultPGProblemFlags, "mock")
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = updated.(Model)
 
@@ -657,7 +668,7 @@ func TestOSDOutOperationFlow(t *testing.T) {
 // mapping — and (c) Esc restores the full list.
 func TestOSDFilterFlow(t *testing.T) {
 	mc := mock.New()
-	m := New(service.New(mc), 5*time.Second, 5, "mock")
+	m := New(service.New(mc), 5*time.Second, 5, model.DefaultPGProblemFlags, "mock")
 	m = fold(m, tea.WindowSizeMsg{Width: 100, Height: 24})
 	m = fold(m, runes("2"))
 	m = fold(m, m.osd.fetch()())
@@ -726,7 +737,7 @@ func TestFooterDockedAtBottom(t *testing.T) {
 	}
 	for _, s := range sizes {
 		t.Run(s.name, func(t *testing.T) {
-			m := New(service.New(mock.New()), 5*time.Second, 5, "mock")
+			m := New(service.New(mock.New()), 5*time.Second, 5, model.DefaultPGProblemFlags, "mock")
 			m = fold(m, tea.WindowSizeMsg{Width: s.w, Height: s.h})
 			m = fold(m, m.fetchDash()())
 
