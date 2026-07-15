@@ -76,11 +76,11 @@ sudo apt-get install -y librados2 librbd1
 sudo dnf install -y librados2 librbd1
 ```
 
-Then download, verify and install the binary (replace `v0.3.0` with the latest
+Then download, verify and install the binary (replace `v0.3.1` with the latest
 release):
 
 ```sh
-VERSION=v0.3.0
+VERSION=v0.3.1
 BASE="https://github.com/cinpol/siphon/releases/download/$VERSION"
 
 curl -LO "$BASE/siphon_${VERSION#v}_linux_amd64.tar.gz"
