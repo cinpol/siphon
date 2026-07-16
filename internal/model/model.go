@@ -90,13 +90,27 @@ func (c Capacity) UsedRatio() float64 {
 	return float64(c.UsedBytes) / float64(c.TotalBytes)
 }
 
+// Orchestrator identifies how the cluster's daemons are managed, so features
+// that depend on the Ceph orchestrator (e.g. the Services view) can adapt.
+// Detection is currently binary from librados: cephadm is present in the mgr
+// modules, or it is not. Non-cephadm clusters (Rook, manual) report
+// OrchestratorNone — we cannot positively name "rook" without Kubernetes
+// context, which a future in-cluster mode can add.
+type Orchestrator string
+
+const (
+	OrchestratorCephadm Orchestrator = "cephadm"
+	OrchestratorNone    Orchestrator = "none"
+)
+
 // Status is the snapshot returned by the `status` command: identity, health,
-// and the live pgmap-derived IO and recovery figures.
+// the live pgmap-derived IO and recovery figures, and the detected orchestrator.
 type Status struct {
-	FSID     string
-	Health   Health
-	IO       ClientIO
-	Recovery Recovery
+	FSID         string
+	Health       Health
+	IO           ClientIO
+	Recovery     Recovery
+	Orchestrator Orchestrator
 }
 
 // OSD is a single object storage daemon and its placement/utilisation state.
@@ -268,6 +282,11 @@ type Dashboard struct {
 	// full pool configuration lives in the Pools view. Empty when there are no
 	// pools or the section failed to load (see Unavailable).
 	Pools []Pool
+
+	// Orchestrator is how the cluster is managed (cephadm vs non-cephadm). The
+	// Services view uses it to adapt rather than firing orch commands that only
+	// work under cephadm.
+	Orchestrator Orchestrator
 
 	// Unavailable lists overview sections that failed to load this cycle (e.g.
 	// "capacity", "flags"). The UI renders those as unavailable rather than

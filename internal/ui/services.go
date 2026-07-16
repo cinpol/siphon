@@ -57,6 +57,12 @@ type serviceModel struct {
 	daemons  []model.Daemon
 	current  string // service name when drilled into daemons
 
+	// orchestrator is the cluster's deployment type, kept in sync from the
+	// dashboard. On a non-cephadm cluster (Rook/manual) `orch` commands don't
+	// exist, so the view shows an explanatory state instead of failing. Empty
+	// until the first dashboard load; treated as cephadm (attempt the call).
+	orchestrator model.Orchestrator
+
 	err     error
 	loading bool
 
@@ -113,10 +119,21 @@ func (m serviceModel) fetchDaemons(name string) tea.Cmd {
 
 // refresh reloads whichever level is active.
 func (m serviceModel) refresh() tea.Cmd {
+	if m.cephadmUnavailable() {
+		return nil // no orchestrator to query; the view explains this instead
+	}
 	if m.level == svcLevelDaemons {
 		return m.fetchDaemons(m.current)
 	}
 	return m.fetch()
+}
+
+// cephadmUnavailable reports whether the view should show its non-cephadm
+// explanation instead of orchestrator data. True only once a non-cephadm cluster
+// is positively detected; an unknown orchestrator (before the first dashboard
+// load) is treated as cephadm so the call is still attempted.
+func (m serviceModel) cephadmUnavailable() bool {
+	return m.orchestrator == model.OrchestratorNone
 }
 
 func (m serviceModel) capturing() bool { return m.confirming || m.filter.typing() }
@@ -135,9 +152,12 @@ func (m serviceModel) filterPrompt() string {
 	return m.filter.prompt()
 }
 
-func (m serviceModel) supportsFilter() bool { return true }
+func (m serviceModel) supportsFilter() bool { return !m.cephadmUnavailable() }
 
 func (m serviceModel) actions() []Action {
+	if m.cephadmUnavailable() {
+		return nil // nothing to act on without a cephadm orchestrator
+	}
 	if m.level == svcLevelDaemons {
 		return []Action{
 			act(m.keys.Restart, false),
@@ -334,6 +354,12 @@ func (m serviceModel) View(width, height int) string {
 }
 
 func (m serviceModel) pageView(width int) string {
+	// On a non-cephadm cluster there is no orchestrator to query, so explain that
+	// rather than showing a failed `orch` call.
+	if m.cephadmUnavailable() {
+		return servicesUnavailableBody()
+	}
+
 	prefix := ""
 	if m.opErr != nil {
 		prefix = styles.Danger.Render("operation failed: "+m.opErr.Error()) + "\n\n"
@@ -358,6 +384,19 @@ func (m serviceModel) pageView(width int) string {
 		return prefix + styles.Faint.Render("Loading services…")
 	}
 	return prefix + m.svcTable.View()
+}
+
+// servicesUnavailableBody explains why the Services view has no data on a cluster
+// without a cephadm orchestrator (Rook or a manual deployment). The rest of
+// Siphon works normally; only cephadm-based service management is unavailable.
+func servicesUnavailableBody() string {
+	title := styles.Label.Render("No cephadm orchestrator detected")
+	body := styles.Faint.Render(
+		"This cluster isn't managed by cephadm, so service management isn't available here.\n" +
+			"Rook and manually-deployed clusters manage their Ceph daemons outside Ceph\n" +
+			"(for Rook, via Kubernetes — e.g. `kubectl -n rook-ceph`).\n\n" +
+			"Dashboard, OSDs, Pools, CRUSH, Flags and PGs all work normally.")
+	return title + "\n\n" + body
 }
 
 func (m serviceModel) selectedService() (model.Service, bool) {

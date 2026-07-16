@@ -50,7 +50,9 @@ Siphon gives you:
 - **Pools** — create, edit (size/min_size/PG/autoscale/rule), delete.
 - **CRUSH** — interactive hierarchy tree; move buckets, view rules.
 - **Cluster flags** — view/toggle with descriptions, rationale and risks.
-- **Services** — cephadm services and daemons; restart, start, stop.
+- **Services** — cephadm services and daemons; restart, start, stop. On
+  non-cephadm clusters (Rook, manual) it detects this and explains, rather than
+  failing.
 - **Placement groups** — cluster-wide listing, live filter, scrub / deep-scrub / repair.
 - **Consistent UX** — `/` filters any table, `:` command prompt, and `y`/`n`
   confirmations that always preview the equivalent `ceph` command.
