@@ -215,6 +215,18 @@ type Daemon struct {
 	Version string
 }
 
+// NodeDaemon is a Ceph daemon as reported by `ceph node ls`: its type, id and
+// host, with no status. Unlike Daemon (which comes from the cephadm orchestrator
+// via `orch ps`), this is deployment-agnostic — it works on cephadm, Rook and
+// manual clusters alike — so the Services view can show a read-only daemon
+// inventory where the cephadm orchestrator is unavailable. (RGW daemons are not
+// reported by `node ls`; they live in the servicemap.)
+type NodeDaemon struct {
+	Type string // mon | mgr | mds | osd
+	ID   string // "a", "0", "ceph-filesystem-a"
+	Host string
+}
+
 // PG is a placement group with its state and up/acting sets. The up set is the
 // OSDs CRUSH wants; the acting set is the OSDs actually serving it — they differ
 // during recovery/backfill.

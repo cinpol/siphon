@@ -111,6 +111,12 @@ func (s *Service) Daemons(ctx context.Context, serviceName string) ([]model.Daem
 	return s.client.Daemons(ctx, serviceName)
 }
 
+// NodeDaemons returns the deployment-agnostic daemon inventory (`ceph node ls`),
+// used by the Services view on non-cephadm clusters.
+func (s *Service) NodeDaemons(ctx context.Context) ([]model.NodeDaemon, error) {
+	return s.client.NodeDaemons(ctx)
+}
+
 // PGsByPool returns the placement groups of a pool.
 func (s *Service) PGsByPool(ctx context.Context, pool string) ([]model.PG, error) {
 	return s.client.PGsByPool(ctx, pool)

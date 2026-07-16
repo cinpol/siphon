@@ -193,6 +193,16 @@ func (c *Client) PoolUsage(ctx context.Context) ([]model.Pool, error) {
 	return pools, nil
 }
 
+// NodeDaemons returns the deployment-agnostic daemon inventory from `ceph node
+// ls` — used by the Services view on non-cephadm clusters (Rook/manual).
+func (c *Client) NodeDaemons(ctx context.Context) ([]model.NodeDaemon, error) {
+	out, err := c.monCommand(map[string]any{"prefix": "node ls", "format": "json"})
+	if err != nil {
+		return nil, err
+	}
+	return decode.NodeDaemons(out)
+}
+
 func (c *Client) CrushTree(ctx context.Context) ([]model.CrushNode, error) {
 	out, err := c.monCommand(map[string]any{"prefix": "osd crush tree", "format": "json"})
 	if err != nil {

@@ -20,20 +20,21 @@ import (
 // Client is a canned, in-memory ceph.Client. Admin commands mutate the in-memory
 // OSD state so the UI reflects operations during development and tests.
 type Client struct {
-	fsid     string
-	version  model.ClusterVersion
-	health   model.Health
-	io       model.ClientIO
-	rec      model.Recovery
-	cap      model.Capacity
-	flags    []string
-	osds     []model.OSD
-	pools    []model.Pool
-	crush    []model.CrushNode
-	rules    []model.CrushRule
-	services []model.Service
-	daemons  map[string][]model.Daemon
-	pgs      map[string][]model.PG
+	fsid        string
+	version     model.ClusterVersion
+	health      model.Health
+	io          model.ClientIO
+	rec         model.Recovery
+	cap         model.Capacity
+	flags       []string
+	osds        []model.OSD
+	pools       []model.Pool
+	crush       []model.CrushNode
+	rules       []model.CrushRule
+	services    []model.Service
+	daemons     map[string][]model.Daemon
+	nodeDaemons []model.NodeDaemon
+	pgs         map[string][]model.PG
 
 	// LastCommand records the most recent Admin command for assertions in tests.
 	LastCommand map[string]any
@@ -153,6 +154,18 @@ func New() *Client {
 				{Name: "rgw.default.ceph-02.opq", Type: "rgw", Host: "ceph-02", Status: "stopped", Version: "20.1.0"},
 			},
 		},
+		// nodeDaemons mirrors `ceph node ls` for the non-cephadm inventory path.
+		nodeDaemons: []model.NodeDaemon{
+			{Type: "mon", ID: "a", Host: "node-1"},
+			{Type: "mon", ID: "b", Host: "node-2"},
+			{Type: "mon", ID: "c", Host: "node-3"},
+			{Type: "mgr", ID: "a", Host: "node-1"},
+			{Type: "mgr", ID: "b", Host: "node-3"},
+			{Type: "mds", ID: "cephfs-a", Host: "node-2"},
+			{Type: "osd", ID: "0", Host: "node-1"},
+			{Type: "osd", ID: "1", Host: "node-2"},
+			{Type: "osd", ID: "2", Host: "node-3"},
+		},
 		pgs: map[string][]model.PG{
 			"rbd": {
 				{ID: "2.0", State: "active+clean", Up: []int{0, 3, 4}, UpPrimary: 0, Acting: []int{0, 3, 4}, ActingPrimary: 0, Objects: 412, Bytes: 1_073_741_824, LastScrub: "2026-07-04T02:11:00", LastDeepScrub: "2026-06-30T01:03:00"},
@@ -262,6 +275,10 @@ func (c *Client) Services(ctx context.Context) ([]model.Service, error) {
 
 func (c *Client) Daemons(ctx context.Context, serviceName string) ([]model.Daemon, error) {
 	return append([]model.Daemon(nil), c.daemons[serviceName]...), nil
+}
+
+func (c *Client) NodeDaemons(ctx context.Context) ([]model.NodeDaemon, error) {
+	return append([]model.NodeDaemon(nil), c.nodeDaemons...), nil
 }
 
 func (c *Client) PGsByPool(ctx context.Context, pool string) ([]model.PG, error) {

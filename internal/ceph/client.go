@@ -74,6 +74,11 @@ type Client interface {
 	// Daemons returns the daemons of a service (from `orch ps --service_name`).
 	Daemons(ctx context.Context, serviceName string) ([]model.Daemon, error)
 
+	// NodeDaemons returns a deployment-agnostic daemon inventory (type, id, host)
+	// from `ceph node ls`. Unlike Daemons it does not depend on the cephadm
+	// orchestrator, so it works on Rook and manual clusters too.
+	NodeDaemons(ctx context.Context) ([]model.NodeDaemon, error)
+
 	// PGsByPool returns the placement groups of a pool (from `pg ls-by-pool`).
 	PGsByPool(ctx context.Context, pool string) ([]model.PG, error)
 
