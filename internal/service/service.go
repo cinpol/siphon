@@ -44,10 +44,11 @@ func (s *Service) Dashboard(ctx context.Context) (*model.Dashboard, error) {
 	}
 
 	d := &model.Dashboard{
-		FSID:     status.FSID,
-		Health:   status.Health,
-		IO:       status.IO,
-		Recovery: status.Recovery,
+		FSID:         status.FSID,
+		Health:       status.Health,
+		IO:           status.IO,
+		Recovery:     status.Recovery,
+		Orchestrator: status.Orchestrator,
 	}
 
 	// Enrich health with per-check detail lines (`health detail`). If it fails,

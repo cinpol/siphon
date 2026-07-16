@@ -412,6 +412,41 @@ func TestServiceDrillAndRestart(t *testing.T) {
 	}
 }
 
+// TestServicesNonCephadmGracefulState verifies that on a non-cephadm cluster
+// (e.g. Rook) the Services view shows an explanation instead of firing `orch`
+// and dumping a raw error — and that no orchestrator call is attempted.
+func TestServicesNonCephadmGracefulState(t *testing.T) {
+	mc := mock.New()
+	mc.Orchestrator = model.OrchestratorNone // simulate Rook/manual
+	m := New(service.New(mc), 5*time.Second, 5, model.DefaultPGProblemFlags, "mock")
+	m = fold(m, tea.WindowSizeMsg{Width: 100, Height: 40})
+
+	// Load the dashboard so the detected orchestrator propagates to the view.
+	m = fold(m, m.fetchDash()())
+	if m.dash.Orchestrator != model.OrchestratorNone {
+		t.Fatalf("expected dashboard to report non-cephadm, got %q", m.dash.Orchestrator)
+	}
+
+	// Enter the Services view. refreshCurrent must not issue an orchestrator call.
+	updated, cmd := m.Update(runes("6"))
+	m = updated.(Model)
+	if cmd != nil {
+		t.Error("expected no fetch command for Services on a non-cephadm cluster")
+	}
+
+	out := m.View()
+	if !strings.Contains(out, "No cephadm orchestrator detected") {
+		t.Errorf("expected the non-cephadm explanation in the Services view:\n%s", out)
+	}
+	if strings.Contains(out, "orch ls") || strings.Contains(out, "Error:") {
+		t.Errorf("should not show a raw orchestrator error:\n%s", out)
+	}
+	// The action bar should offer nothing to do here.
+	if len(m.services.actions()) != 0 {
+		t.Errorf("expected no service actions on a non-cephadm cluster, got %v", m.services.actions())
+	}
+}
+
 // TestFlagToggleFlow verifies toggling a flag: open the flags view, select an
 // unset flag, press `t` to toggle, confirm with `y`, and check the command
 // dispatched and the flag is now set after refresh.

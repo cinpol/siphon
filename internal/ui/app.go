@@ -192,6 +192,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.dashErr = nil
 		m.dashLoading = false
 		m.lastSync = time.Now()
+		// Keep the Services view's orchestrator awareness in sync, so on a
+		// non-cephadm cluster it shows its explanation instead of failing `orch`.
+		m.services.orchestrator = msg.dash.Orchestrator
 		// Keep an open Health-detail overlay in step with fresh data: reload its
 		// content (the viewport preserves the scroll offset), and close it if the
 		// cluster has recovered and there is nothing left to show.

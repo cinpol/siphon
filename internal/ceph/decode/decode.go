@@ -108,9 +108,23 @@ func Status(raw []byte) (*model.Status, error) {
 				Count     int    `json:"count"`
 			} `json:"pgs_by_state"`
 		} `json:"pgmap"`
+		MgrMap struct {
+			Modules []string `json:"modules"`
+		} `json:"mgrmap"`
 	}
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		return nil, fmt.Errorf("decode status: %w", err)
+	}
+
+	// The orchestrator is detected from the enabled mgr modules: cephadm-managed
+	// clusters run the "cephadm" module, Rook/manual ones do not. This drives the
+	// Services view, which can only use `orch` commands under cephadm.
+	orchestrator := model.OrchestratorNone
+	for _, mod := range payload.MgrMap.Modules {
+		if mod == "cephadm" {
+			orchestrator = model.OrchestratorCephadm
+			break
+		}
 	}
 
 	clean := 0
@@ -121,8 +135,9 @@ func Status(raw []byte) (*model.Status, error) {
 	}
 
 	return &model.Status{
-		FSID:   payload.FSID,
-		Health: payload.Health.toModel(),
+		FSID:         payload.FSID,
+		Health:       payload.Health.toModel(),
+		Orchestrator: orchestrator,
 		IO: model.ClientIO{
 			ReadBytesSec:  payload.PGMap.ReadBytesSec,
 			WriteBytesSec: payload.PGMap.WriteBytesSec,

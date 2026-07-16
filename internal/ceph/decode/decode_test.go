@@ -1,6 +1,7 @@
 package decode
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/cinpol/siphon/internal/model"
@@ -94,6 +95,27 @@ func TestStatus(t *testing.T) {
 	}
 	if !st.Recovery.Active() {
 		t.Error("expected recovery to be active (backfilling + misplaced)")
+	}
+}
+
+func TestStatusOrchestrator(t *testing.T) {
+	base := `{"health":{"status":"HEALTH_OK","checks":{}},"pgmap":{},"mgrmap":{"modules":%s}}`
+
+	cephadm, err := Status([]byte(fmt.Sprintf(base, `["dashboard","cephadm","iostat"]`)))
+	if err != nil {
+		t.Fatalf("Status(cephadm) error: %v", err)
+	}
+	if cephadm.Orchestrator != model.OrchestratorCephadm {
+		t.Errorf("with cephadm module, Orchestrator = %q, want %q", cephadm.Orchestrator, model.OrchestratorCephadm)
+	}
+
+	// Rook: no cephadm module (this is the real mgr module list from a Rook cluster).
+	rook, err := Status([]byte(fmt.Sprintf(base, `["dashboard","iostat","nfs"]`)))
+	if err != nil {
+		t.Fatalf("Status(rook) error: %v", err)
+	}
+	if rook.Orchestrator != model.OrchestratorNone {
+		t.Errorf("without cephadm module, Orchestrator = %q, want %q", rook.Orchestrator, model.OrchestratorNone)
 	}
 }
 

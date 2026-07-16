@@ -38,6 +38,11 @@ type Client struct {
 	// LastCommand records the most recent Admin command for assertions in tests.
 	LastCommand map[string]any
 
+	// Orchestrator is the deployment type the mock reports (default cephadm, so
+	// the Services view works); tests can set OrchestratorNone to exercise the
+	// non-cephadm (Rook/manual) degradation path.
+	Orchestrator model.Orchestrator
+
 	// Injectable errors for testing robustness/degradation. When set, the
 	// matching read method returns the error instead of data.
 	ErrStatus, ErrVersion, ErrCapacity, ErrFlags, ErrOSDs, ErrPools error
@@ -49,7 +54,8 @@ type Client struct {
 // New returns a mock client preloaded with a demo cluster.
 func New() *Client {
 	return &Client{
-		fsid: "b3e2f1a4-0000-1111-2222-333344445555",
+		Orchestrator: model.OrchestratorCephadm,
+		fsid:         "b3e2f1a4-0000-1111-2222-333344445555",
 		version: model.ClusterVersion{
 			Raw:     "ceph version 20.1.0 (0000000000000000000000000000000000000000) tentacle (stable)",
 			Release: "tentacle",
@@ -171,10 +177,11 @@ func (c *Client) Status(ctx context.Context) (*model.Status, error) {
 		return nil, c.ErrStatus
 	}
 	return &model.Status{
-		FSID:     c.fsid,
-		Health:   c.cloneHealth(),
-		IO:       c.io,
-		Recovery: c.rec,
+		FSID:         c.fsid,
+		Health:       c.cloneHealth(),
+		IO:           c.io,
+		Recovery:     c.rec,
+		Orchestrator: c.Orchestrator,
 	}, nil
 }
 
