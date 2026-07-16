@@ -392,6 +392,64 @@ func Daemons(raw []byte) ([]model.Daemon, error) {
 	return daemons, nil
 }
 
+// nodeTypeOrder ranks daemon types for a readable inventory (mon, mgr, mds, osd).
+var nodeTypeOrder = map[string]int{"mon": 0, "mgr": 1, "mds": 2, "osd": 3}
+
+func nodeTypeRank(t string) int {
+	if r, ok := nodeTypeOrder[t]; ok {
+		return r
+	}
+	return len(nodeTypeOrder) // unknown types sort last
+}
+
+// lessID orders two daemon ids: numerically when both are integers (OSD ids like
+// 2 vs 10), lexically otherwise (mon "a"/"b"/"c").
+func lessID(a, b string) bool {
+	if ai, aerr := strconv.Atoi(a); aerr == nil {
+		if bi, berr := strconv.Atoi(b); berr == nil {
+			return ai < bi
+		}
+	}
+	return a < b
+}
+
+// NodeDaemons decodes `ceph node ls` — a {type: {host: [ids]}} map — into a flat,
+// sorted daemon inventory (type, id, host). Ids are numbers for OSDs and strings
+// for mon/mgr/mds, so each is decoded loosely and normalised to a string. This is
+// deployment-agnostic: it works on cephadm, Rook and manual clusters, so the
+// Services view can show an inventory where the cephadm orchestrator is absent.
+func NodeDaemons(raw []byte) ([]model.NodeDaemon, error) {
+	var payload map[string]map[string][]json.RawMessage
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil, fmt.Errorf("decode node ls: %w", err)
+	}
+
+	var daemons []model.NodeDaemon
+	for dtype, hosts := range payload {
+		for host, ids := range hosts {
+			for _, rawID := range ids {
+				daemons = append(daemons, model.NodeDaemon{
+					Type: dtype,
+					ID:   strings.Trim(string(rawID), `"`), // numbers pass through, strings lose quotes
+					Host: host,
+				})
+			}
+		}
+	}
+
+	sort.Slice(daemons, func(i, j int) bool {
+		a, b := daemons[i], daemons[j]
+		if ra, rb := nodeTypeRank(a.Type), nodeTypeRank(b.Type); ra != rb {
+			return ra < rb
+		}
+		if a.ID != b.ID {
+			return lessID(a.ID, b.ID)
+		}
+		return a.Host < b.Host
+	})
+	return daemons, nil
+}
+
 // CrushNodes decodes the CRUSH hierarchy from "osd crush tree" output into a
 // flat list of nodes (each carrying its child ids). The UI builds the tree and
 // computes bucket weights from the leaves.

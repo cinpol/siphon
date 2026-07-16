@@ -119,6 +119,45 @@ func TestStatusOrchestrator(t *testing.T) {
 	}
 }
 
+func TestNodeDaemons(t *testing.T) {
+	// Real `ceph node ls` output from a Rook cluster (osd ids are numbers,
+	// mon/mgr/mds ids are strings).
+	raw := []byte(`{
+		"mon": {"k3d-rook-agent-0": ["a"], "k3d-rook-agent-1": ["b"], "k3d-rook-agent-2": ["c"]},
+		"osd": {"k3d-rook-agent-0": [0], "k3d-rook-agent-1": [2], "k3d-rook-agent-2": [1]},
+		"mds": {"k3d-rook-agent-1": ["ceph-filesystem-a", "ceph-filesystem-b"]},
+		"mgr": {"k3d-rook-agent-0": ["b"], "k3d-rook-agent-2": ["a"]}
+	}`)
+
+	ds, err := NodeDaemons(raw)
+	if err != nil {
+		t.Fatalf("NodeDaemons error: %v", err)
+	}
+	if len(ds) != 10 { // 3 mon + 2 mgr + 2 mds + 3 osd
+		t.Fatalf("got %d daemons, want 10: %+v", len(ds), ds)
+	}
+
+	// Sorted mon, mgr, mds, osd; numeric ids in numeric order.
+	if ds[0].Type != "mon" || ds[0].ID != "a" {
+		t.Errorf("first daemon = %+v, want mon/a", ds[0])
+	}
+	var osds []string
+	for _, d := range ds {
+		if d.Type == "osd" {
+			osds = append(osds, d.ID)
+		}
+	}
+	if len(osds) != 3 || osds[0] != "0" || osds[1] != "1" || osds[2] != "2" {
+		t.Errorf("osd ids = %v, want [0 1 2] (numeric order)", osds)
+	}
+	// osd id 0 lives on agent-0 (number decoded to a bare string, no quotes).
+	for _, d := range ds {
+		if d.Type == "osd" && d.ID == "0" && d.Host != "k3d-rook-agent-0" {
+			t.Errorf("osd.0 host = %q, want k3d-rook-agent-0", d.Host)
+		}
+	}
+}
+
 func TestCapacity(t *testing.T) {
 	raw := []byte(`{"stats": {"total_bytes": 43980465111040, "total_used_bytes": 13194139533312, "total_avail_bytes": 30786325577728}}`)
 

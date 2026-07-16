@@ -412,10 +412,10 @@ func TestServiceDrillAndRestart(t *testing.T) {
 	}
 }
 
-// TestServicesNonCephadmGracefulState verifies that on a non-cephadm cluster
-// (e.g. Rook) the Services view shows an explanation instead of firing `orch`
-// and dumping a raw error — and that no orchestrator call is attempted.
-func TestServicesNonCephadmGracefulState(t *testing.T) {
+// TestServicesNonCephadmInventory verifies that on a non-cephadm cluster (e.g.
+// Rook) the Services view shows the read-only `ceph node ls` daemon inventory
+// (never a raw `orch` error), and offers no management actions.
+func TestServicesNonCephadmInventory(t *testing.T) {
 	mc := mock.New()
 	mc.Orchestrator = model.OrchestratorNone // simulate Rook/manual
 	m := New(service.New(mc), 5*time.Second, 5, model.DefaultPGProblemFlags, "mock")
@@ -427,21 +427,27 @@ func TestServicesNonCephadmGracefulState(t *testing.T) {
 		t.Fatalf("expected dashboard to report non-cephadm, got %q", m.dash.Orchestrator)
 	}
 
-	// Enter the Services view. refreshCurrent must not issue an orchestrator call.
+	// Enter Services; this fetches the node-ls inventory (not an orch call).
 	updated, cmd := m.Update(runes("6"))
 	m = updated.(Model)
-	if cmd != nil {
-		t.Error("expected no fetch command for Services on a non-cephadm cluster")
+	if cmd == nil {
+		t.Fatal("expected a node-ls fetch command on a non-cephadm cluster")
 	}
+	m = fold(m, cmd())
 
 	out := m.View()
-	if !strings.Contains(out, "No cephadm orchestrator detected") {
-		t.Errorf("expected the non-cephadm explanation in the Services view:\n%s", out)
+	if !strings.Contains(out, "Read-only inventory") {
+		t.Errorf("expected the read-only inventory note:\n%s", out)
+	}
+	for _, want := range []string{"TYPE", "mon", "osd", "node-1"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("inventory missing %q\n%s", want, out)
+		}
 	}
 	if strings.Contains(out, "orch ls") || strings.Contains(out, "Error:") {
 		t.Errorf("should not show a raw orchestrator error:\n%s", out)
 	}
-	// The action bar should offer nothing to do here.
+	// Read-only: no management actions.
 	if len(m.services.actions()) != 0 {
 		t.Errorf("expected no service actions on a non-cephadm cluster, got %v", m.services.actions())
 	}

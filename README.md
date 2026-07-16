@@ -51,8 +51,8 @@ Siphon gives you:
 - **CRUSH** — interactive hierarchy tree; move buckets, view rules.
 - **Cluster flags** — view/toggle with descriptions, rationale and risks.
 - **Services** — cephadm services and daemons; restart, start, stop. On
-  non-cephadm clusters (Rook, manual) it detects this and explains, rather than
-  failing.
+  non-cephadm clusters (Rook, manual) it detects this and shows a read-only
+  daemon inventory (`ceph node ls`) instead of failing.
 - **Placement groups** — cluster-wide listing, live filter, scrub / deep-scrub / repair.
 - **Consistent UX** — `/` filters any table, `:` command prompt, and `y`/`n`
   confirmations that always preview the equivalent `ceph` command.

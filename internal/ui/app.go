@@ -235,7 +235,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.flags, cmd = m.flags.Update(msg)
 		return m, cmd
 
-	case servicesMsg, daemonsMsg, serviceErrMsg:
+	case servicesMsg, daemonsMsg, nodeDaemonsMsg, serviceErrMsg:
 		var cmd tea.Cmd
 		m.services, cmd = m.services.Update(msg)
 		return m, cmd

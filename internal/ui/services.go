@@ -57,10 +57,15 @@ type serviceModel struct {
 	daemons  []model.Daemon
 	current  string // service name when drilled into daemons
 
+	// Non-cephadm inventory: on Rook/manual clusters there is no orchestrator, so
+	// the view shows a read-only daemon inventory from `ceph node ls` instead.
+	nodeTable   table.Model
+	nodeDaemons []model.NodeDaemon
+
 	// orchestrator is the cluster's deployment type, kept in sync from the
 	// dashboard. On a non-cephadm cluster (Rook/manual) `orch` commands don't
-	// exist, so the view shows an explanatory state instead of failing. Empty
-	// until the first dashboard load; treated as cephadm (attempt the call).
+	// exist, so the view shows the node-ls inventory instead. Empty until the
+	// first dashboard load; treated as cephadm (attempt the orchestrator).
 	orchestrator model.Orchestrator
 
 	err     error
@@ -81,7 +86,9 @@ func newServiceModel(svc *service.Service) serviceModel {
 	st.SetStyles(osdTableStyles())
 	dt := table.New(table.WithColumns(daemonColumns()), table.WithFocused(true))
 	dt.SetStyles(osdTableStyles())
-	return serviceModel{svc: svc, keys: defaultServiceKeys(), svcTable: st, dmnTable: dt, filter: newTableFilter(), loading: true}
+	nt := table.New(table.WithColumns(nodeDaemonColumns()), table.WithFocused(true))
+	nt.SetStyles(osdTableStyles())
+	return serviceModel{svc: svc, keys: defaultServiceKeys(), svcTable: st, dmnTable: dt, nodeTable: nt, filter: newTableFilter(), loading: true}
 }
 
 type (
@@ -90,7 +97,8 @@ type (
 		service string
 		daemons []model.Daemon
 	}
-	serviceErrMsg struct{ err error }
+	nodeDaemonsMsg struct{ daemons []model.NodeDaemon }
+	serviceErrMsg  struct{ err error }
 )
 
 func (m serviceModel) fetch() tea.Cmd {
@@ -117,10 +125,24 @@ func (m serviceModel) fetchDaemons(name string) tea.Cmd {
 	}
 }
 
+// fetchNodeDaemons loads the deployment-agnostic daemon inventory (`ceph node
+// ls`), used on non-cephadm clusters instead of the orchestrator.
+func (m serviceModel) fetchNodeDaemons() tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), fetchTimeout)
+		defer cancel()
+		ds, err := m.svc.NodeDaemons(ctx)
+		if err != nil {
+			return serviceErrMsg{err}
+		}
+		return nodeDaemonsMsg{ds}
+	}
+}
+
 // refresh reloads whichever level is active.
 func (m serviceModel) refresh() tea.Cmd {
 	if m.cephadmUnavailable() {
-		return nil // no orchestrator to query; the view explains this instead
+		return m.fetchNodeDaemons() // no orchestrator; show the node-ls inventory
 	}
 	if m.level == svcLevelDaemons {
 		return m.fetchDaemons(m.current)
@@ -128,10 +150,10 @@ func (m serviceModel) refresh() tea.Cmd {
 	return m.fetch()
 }
 
-// cephadmUnavailable reports whether the view should show its non-cephadm
-// explanation instead of orchestrator data. True only once a non-cephadm cluster
-// is positively detected; an unknown orchestrator (before the first dashboard
-// load) is treated as cephadm so the call is still attempted.
+// cephadmUnavailable reports whether the view should show the node-ls inventory
+// (non-cephadm) instead of orchestrator data. True only once a non-cephadm
+// cluster is positively detected; an unknown orchestrator (before the first
+// dashboard load) is treated as cephadm so the orchestrator call is attempted.
 func (m serviceModel) cephadmUnavailable() bool {
 	return m.orchestrator == model.OrchestratorNone
 }
@@ -152,7 +174,7 @@ func (m serviceModel) filterPrompt() string {
 	return m.filter.prompt()
 }
 
-func (m serviceModel) supportsFilter() bool { return !m.cephadmUnavailable() }
+func (m serviceModel) supportsFilter() bool { return true }
 
 func (m serviceModel) actions() []Action {
 	if m.cephadmUnavailable() {
@@ -172,20 +194,27 @@ func (m serviceModel) actions() []Action {
 	}
 }
 
-// activeRows returns the rows of the level currently on screen, for the filter.
+// activeRows returns the rows of the table currently on screen, for the filter.
 func (m serviceModel) activeRows() []table.Row {
-	if m.level == svcLevelDaemons {
+	switch {
+	case m.cephadmUnavailable():
+		return nodeDaemonRows(m.nodeDaemons)
+	case m.level == svcLevelDaemons:
 		return daemonRows(m.daemons)
+	default:
+		return serviceRows(m.services)
 	}
-	return serviceRows(m.services)
 }
 
-// reapplyFilter refreshes the active level's table rows through the filter (used
-// after clearing the filter so the full list returns).
+// reapplyFilter refreshes the active table's rows through the filter (used after
+// clearing the filter so the full list returns).
 func (m *serviceModel) reapplyFilter() {
-	if m.level == svcLevelDaemons {
+	switch {
+	case m.cephadmUnavailable():
+		m.nodeTable.SetRows(m.filter.apply(nodeDaemonRows(m.nodeDaemons)))
+	case m.level == svcLevelDaemons:
 		m.dmnTable.SetRows(m.filter.apply(daemonRows(m.daemons)))
-	} else {
+	default:
 		m.svcTable.SetRows(m.filter.apply(serviceRows(m.services)))
 	}
 }
@@ -194,9 +223,12 @@ func (m *serviceModel) setSize(width, height int) {
 	m.width, m.height = width, height
 	m.svcTable.SetColumns(fitColumns(serviceColumns(), width))
 	m.dmnTable.SetColumns(fitColumns(daemonColumns(), width))
+	m.nodeTable.SetColumns(fitColumns(nodeDaemonColumns(), width))
 	if height > 3 {
 		m.svcTable.SetHeight(height - 1)
 		m.dmnTable.SetHeight(height - 1)
+		// The inventory reserves two lines for its explanatory note above the table.
+		m.nodeTable.SetHeight(height - 2)
 	}
 }
 
@@ -216,6 +248,13 @@ func (m serviceModel) Update(msg tea.Msg) (serviceModel, tea.Cmd) {
 		m.daemons = msg.daemons
 		m.dmnTable.SetRows(m.filter.apply(daemonRows(m.daemons)))
 		return m, nil
+	case nodeDaemonsMsg:
+		m.err = nil
+		m.opErr = nil
+		m.loading = false
+		m.nodeDaemons = msg.daemons
+		m.nodeTable.SetRows(m.filter.apply(nodeDaemonRows(m.nodeDaemons)))
+		return m, nil
 	case serviceErrMsg:
 		m.err = msg.err
 		m.loading = false
@@ -233,11 +272,14 @@ func (m serviceModel) Update(msg tea.Msg) (serviceModel, tea.Cmd) {
 	}
 
 	var cmd tea.Cmd
-	if m.confirming {
+	switch {
+	case m.confirming:
 		m.confirm, cmd = m.confirm.Update(msg)
-	} else if m.level == svcLevelDaemons {
+	case m.cephadmUnavailable():
+		m.nodeTable, cmd = m.nodeTable.Update(msg)
+	case m.level == svcLevelDaemons:
 		m.dmnTable, cmd = m.dmnTable.Update(msg)
-	} else {
+	default:
 		m.svcTable, cmd = m.svcTable.Update(msg)
 	}
 	return m, cmd
@@ -246,7 +288,10 @@ func (m serviceModel) Update(msg tea.Msg) (serviceModel, tea.Cmd) {
 func (m serviceModel) handleKey(msg tea.KeyMsg) (serviceModel, tea.Cmd) {
 	if m.filter.typing() {
 		t := &m.svcTable
-		if m.level == svcLevelDaemons {
+		switch {
+		case m.cephadmUnavailable():
+			t = &m.nodeTable
+		case m.level == svcLevelDaemons:
 			t = &m.dmnTable
 		}
 		cmd, _ := m.filter.handleKey(msg, t, m.activeRows())
@@ -280,9 +325,14 @@ func (m serviceModel) handleKey(msg tea.KeyMsg) (serviceModel, tea.Cmd) {
 	return m.dispatch(msg)
 }
 
-// dispatch routes a normal-mode key to the active level's handler, whether from
-// a hotkey or a replayed menu selection.
+// dispatch routes a normal-mode key to the active handler. The non-cephadm
+// inventory is read-only, so keys only navigate its table.
 func (m serviceModel) dispatch(msg tea.KeyMsg) (serviceModel, tea.Cmd) {
+	if m.cephadmUnavailable() {
+		var cmd tea.Cmd
+		m.nodeTable, cmd = m.nodeTable.Update(msg)
+		return m, cmd
+	}
 	if m.level == svcLevelDaemons {
 		return m.handleDaemonKey(msg)
 	}
@@ -354,10 +404,10 @@ func (m serviceModel) View(width, height int) string {
 }
 
 func (m serviceModel) pageView(width int) string {
-	// On a non-cephadm cluster there is no orchestrator to query, so explain that
-	// rather than showing a failed `orch` call.
+	// On a non-cephadm cluster there is no orchestrator; show the read-only
+	// `ceph node ls` inventory instead of a failed `orch` call.
 	if m.cephadmUnavailable() {
-		return servicesUnavailableBody()
+		return m.nodeInventoryView()
 	}
 
 	prefix := ""
@@ -386,17 +436,43 @@ func (m serviceModel) pageView(width int) string {
 	return prefix + m.svcTable.View()
 }
 
-// servicesUnavailableBody explains why the Services view has no data on a cluster
-// without a cephadm orchestrator (Rook or a manual deployment). The rest of
-// Siphon works normally; only cephadm-based service management is unavailable.
-func servicesUnavailableBody() string {
-	title := styles.Label.Render("No cephadm orchestrator detected")
-	body := styles.Faint.Render(
-		"This cluster isn't managed by cephadm, so service management isn't available here.\n" +
-			"Rook and manually-deployed clusters manage their Ceph daemons outside Ceph\n" +
-			"(for Rook, via Kubernetes — e.g. `kubectl -n rook-ceph`).\n\n" +
-			"Dashboard, OSDs, Pools, CRUSH, Flags and PGs all work normally.")
-	return title + "\n\n" + body
+// nodeInventoryView renders the read-only daemon inventory shown on non-cephadm
+// clusters (Rook/manual): a note explaining why management is unavailable, then
+// the `ceph node ls` table (type/id/host). Management actions need the
+// orchestrator (cephadm) or, for Rook, Kubernetes — neither is wired here.
+func (m serviceModel) nodeInventoryView() string {
+	note := styles.Faint.Render(
+		"Read-only inventory (ceph node ls) — no cephadm orchestrator, so service " +
+			"management isn't available here (Rook manages daemons via Kubernetes).")
+
+	var body string
+	switch {
+	case m.err != nil && len(m.nodeDaemons) == 0:
+		body = styles.Danger.Render("Error: ") + m.err.Error()
+	case m.loading && m.nodeDaemons == nil:
+		body = styles.Faint.Render("Loading daemons…")
+	case len(m.nodeDaemons) == 0:
+		body = styles.Faint.Render("no daemons reported")
+	default:
+		body = m.nodeTable.View()
+	}
+	return note + "\n" + body
+}
+
+func nodeDaemonColumns() []table.Column {
+	return []table.Column{
+		{Title: "TYPE", Width: 6},
+		{Title: "ID", Width: 22},
+		{Title: "HOST", Width: 22},
+	}
+}
+
+func nodeDaemonRows(ds []model.NodeDaemon) []table.Row {
+	rows := make([]table.Row, len(ds))
+	for i, d := range ds {
+		rows[i] = table.Row{d.Type, d.ID, d.Host}
+	}
+	return rows
 }
 
 func (m serviceModel) selectedService() (model.Service, bool) {
