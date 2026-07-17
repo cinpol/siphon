@@ -1,0 +1,47 @@
+# Run Siphon in Kubernetes against ANY Ceph cluster reachable from the pod
+# (cephadm, manual, or external) — no Rook required.
+#
+# You provide the cluster's config + admin keyring as a Secret; the pod mounts it
+# at /etc/ceph, exactly where librados looks by default. Create the Secret from a
+# host that can already talk to the cluster (where `ceph -s` works):
+#
+#   kubectl create secret generic siphon-ceph \
+#     --from-file=ceph.conf=/etc/ceph/ceph.conf \
+#     --from-file=ceph.client.admin.keyring=/etc/ceph/ceph.client.admin.keyring
+#
+# Then:
+#   kubectl apply -f siphon.yaml
+#   kubectl exec -it deploy/siphon -- siphon
+#
+# The pod must have network access to the cluster's MONs.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: siphon
+  labels:
+    app: siphon
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: siphon
+  template:
+    metadata:
+      labels:
+        app: siphon
+    spec:
+      containers:
+        - name: siphon
+          image: docker.io/cinpol/siphon:latest
+          # The TUI is interactive; keep the pod alive and `kubectl exec` in.
+          command: ["sleep", "infinity"]
+          stdin: true
+          tty: true
+          volumeMounts:
+            - name: ceph-config
+              mountPath: /etc/ceph
+              readOnly: true
+      volumes:
+        - name: ceph-config
+          secret:
+            secretName: siphon-ceph

@@ -116,6 +116,19 @@ sudo ./bin/siphon          # --client auto
 `sudo` (or another user that can read the admin keyring) lets librados
 authenticate the way the `ceph` CLI does.
 
+### Run in a container
+
+A prebuilt image (with the Ceph client libraries bundled) is on Docker Hub:
+
+```sh
+docker run --rm -it -v /etc/ceph:/etc/ceph:ro docker.io/cinpol/siphon
+```
+
+Works against any cluster the container can reach. See
+[docs/docker.md](docs/docker.md), and for Kubernetes
+[docs/kubernetes.md](docs/kubernetes.md) (any cluster) or
+[docs/rook.md](docs/rook.md) (Rook-Ceph).
+
 ### Try it without a cluster
 
 Build the pure-Go binary that talks only to an in-memory mock — works on any OS,
