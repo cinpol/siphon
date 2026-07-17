@@ -10,6 +10,11 @@ BIN_DIR := bin
 BINARY  := $(BIN_DIR)/siphon
 VERSION_PKG := github.com/cinpol/siphon/internal/version
 
+# Container image settings. CEPH_RELEASE picks which Ceph client the image
+# bundles (see Dockerfile); override IMAGE/CEPH_RELEASE on the command line.
+IMAGE        ?= cinpol/siphon
+CEPH_RELEASE ?= tentacle
+
 # Version metadata stamped into the binary. Override on the command line if
 # needed, e.g. `make build VERSION=1.2.3`.
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo 0.1.0-dev)
@@ -21,7 +26,7 @@ LDFLAGS := -s -w \
 	-X $(VERSION_PKG).Commit=$(COMMIT) \
 	-X $(VERSION_PKG).Date=$(DATE)
 
-.PHONY: build build-mock test vet fmt tidy clean version help
+.PHONY: build build-mock docker test vet fmt tidy clean version help
 
 ## build: build the real binary (needs CGO + librados/librbd; see README)
 build:
@@ -30,6 +35,10 @@ build:
 ## build-mock: build a pure-Go binary (mock client only; no Ceph libraries needed)
 build-mock:
 	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o $(BINARY)-mock ./cmd/siphon
+
+## docker: build the container image (bundles the Ceph client; needs Docker)
+docker:
+	docker build --build-arg CEPH_RELEASE=$(CEPH_RELEASE) --build-arg VERSION=$(VERSION) -t $(IMAGE):dev .
 
 ## test: run the test suite
 test:

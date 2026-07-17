@@ -1,0 +1,85 @@
+# Run Siphon inside a Rook-Ceph cluster.
+#
+# An init container generates /etc/ceph/{ceph.conf,keyring} from Rook's own
+# secret (rook-ceph-mon) and configmap (rook-ceph-mon-endpoints) — the same way
+# the rook-ceph toolbox does — into a shared volume. The main container then
+# sleeps; you attach to run the TUI:
+#
+#   kubectl -n rook-ceph apply -f siphon-rook.yaml
+#   kubectl -n rook-ceph exec -it deploy/siphon -- siphon
+#
+# Assumes the default Rook namespace/resource names. Adjust the namespace if your
+# cluster differs.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: siphon
+  namespace: rook-ceph
+  labels:
+    app: siphon
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: siphon
+  template:
+    metadata:
+      labels:
+        app: siphon
+    spec:
+      initContainers:
+        - name: config-init
+          image: docker.io/cinpol/siphon:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              # mon-endpoints looks like "a=10.0.0.1:6789,b=10.0.0.2:6789"; drop
+              # the "name=" prefixes to get the mon_host list librados wants.
+              mon_host=$(sed 's/[a-z0-9_-]*=//g' /etc/rook/mon-endpoints)
+              cat > /etc/ceph/ceph.conf <<EOF
+              [global]
+              mon_host = $mon_host
+
+              [client.admin]
+              keyring = /etc/ceph/keyring
+              EOF
+              cat > /etc/ceph/keyring <<EOF
+              [$ROOK_CEPH_USERNAME]
+              key = $ROOK_CEPH_SECRET
+              EOF
+          env:
+            - name: ROOK_CEPH_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: rook-ceph-mon
+                  key: ceph-username
+            - name: ROOK_CEPH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: rook-ceph-mon
+                  key: ceph-secret
+          volumeMounts:
+            - name: ceph-config
+              mountPath: /etc/ceph
+            - name: mon-endpoint
+              mountPath: /etc/rook
+      containers:
+        - name: siphon
+          image: docker.io/cinpol/siphon:latest
+          # The TUI is interactive; keep the pod alive and `kubectl exec` in.
+          command: ["sleep", "infinity"]
+          stdin: true
+          tty: true
+          volumeMounts:
+            - name: ceph-config
+              mountPath: /etc/ceph
+      volumes:
+        - name: ceph-config
+          emptyDir: {}
+        - name: mon-endpoint
+          configMap:
+            name: rook-ceph-mon-endpoints
+            items:
+              - key: data
+                path: mon-endpoints

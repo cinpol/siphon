@@ -1,0 +1,11 @@
+# Keep the build context small and free of local-only / non-build files.
+.git
+.github
+bin/
+*-mock
+*.md
+*.svg
+*.gif
+*.png
+deploy/
+docs/
