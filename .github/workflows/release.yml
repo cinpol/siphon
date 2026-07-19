@@ -15,19 +15,56 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # GoReleaser needs full history + tags
+          fetch-depth: 0 # GoReleaser needs full history + tags for the changelog
 
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
           cache: true
 
-      # The release binary links librados/librbd via cgo, so the Ceph client
-      # development headers must be present on the (amd64) runner.
-      - name: Install Ceph client libraries
+      # The real binary links librados/librbd via cgo, so both architectures
+      # need the Ceph client dev libraries. amd64 builds natively; arm64 is
+      # cross-compiled, which needs the arm64 cross-compiler plus the arm64
+      # librados/librbd installed side-by-side via Debian/Ubuntu "multiarch".
+      # arm64 library packages live on ports.ubuntu.com, so we scope the default
+      # sources to amd64 and add the ports mirror for arm64.
+      - name: Install Ceph client libraries (amd64 + arm64 cross)
         run: |
+          set -eux
+          sudo dpkg --add-architecture arm64
+
+          # We only need Ubuntu's own repositories here: they carry the arm64
+          # cross-compiler and the Ceph client dev libraries for both arches.
+          # Once arm64 is enabled, `apt update` would also query third-party
+          # repos (Microsoft, Docker, ...) for arm64 indexes they don't publish
+          # and fail, so move everything except Ubuntu's sources out of the way.
+          sudo mkdir -p /tmp/apt-disabled
+          for f in /etc/apt/sources.list.d/*; do
+            case "$f" in
+              */ubuntu.sources) ;;
+              *) [ -e "$f" ] && sudo mv "$f" /tmp/apt-disabled/ ;;
+            esac
+          done
+          [ -s /etc/apt/sources.list ] && sudo mv /etc/apt/sources.list /tmp/apt-disabled/base.list
+
+          # Scope Ubuntu's repos to amd64 and add arm64 from the ports mirror,
+          # pinned to this runner's codename so it survives runner-image bumps.
+          sudo sed -i '/^Types:/a Architectures: amd64' /etc/apt/sources.list.d/ubuntu.sources
+          codename="$(. /etc/os-release && echo "$VERSION_CODENAME")"
+          sudo tee /etc/apt/sources.list.d/arm64-ports.sources >/dev/null <<EOF
+          Types: deb
+          URIs: http://ports.ubuntu.com/ubuntu-ports
+          Suites: ${codename} ${codename}-updates ${codename}-backports ${codename}-security
+          Components: main universe restricted multiverse
+          Architectures: arm64
+          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+          EOF
+
           sudo apt-get update
-          sudo apt-get install -y librados-dev librbd-dev
+          sudo apt-get install -y \
+            gcc-aarch64-linux-gnu \
+            librados-dev librbd-dev \
+            librados-dev:arm64 librbd-dev:arm64
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
@@ -37,11 +74,30 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # Build the container image for each architecture on a native runner and push
+  # it by digest (no tag yet); the docker-merge job then stitches the per-arch
+  # digests into one multi-arch tag. Native runners avoid emulating arm64 under
+  # qemu, and the image compiles Siphon inside its own build, so no cross setup
+  # is needed here.
   docker:
-    name: Docker image (Docker Hub)
-    runs-on: ubuntu-latest
+    name: Docker image (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            arch: amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            arch: arm64
+            runner: ubuntu-24.04-arm # free native arm64 runner (public repos)
     steps:
       - uses: actions/checkout@v4
+
+      - name: Image version
+        id: ver
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -52,20 +108,65 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # Image tags drop the leading "v" (Docker convention): v0.4.0 -> 0.4.0.
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          build-args: |
+            CEPH_RELEASE=tentacle
+            VERSION=${{ steps.ver.outputs.version }}
+          outputs: type=image,name=docker.io/cinpol/siphon,push-by-digest=true,name-canonical=true,push=true
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ matrix.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  docker-merge:
+    name: Docker manifest (Docker Hub)
+    needs: docker
+    runs-on: ubuntu-latest
+    steps:
       - name: Image version
         id: ver
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
-      - name: Build and push
-        uses: docker/build-push-action@v6
+      - name: Download digests
+        uses: actions/download-artifact@v4
         with:
-          context: .
-          platforms: linux/amd64
-          push: true
-          build-args: |
-            CEPH_RELEASE=tentacle
-            VERSION=${{ steps.ver.outputs.version }}
-          tags: |
-            cinpol/siphon:${{ steps.ver.outputs.version }}
-            cinpol/siphon:latest
+          pattern: digest-*
+          path: /tmp/digests
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Stitch the per-arch digests into one multi-arch manifest. Image tags
+      # drop the leading "v" (Docker convention): v0.4.0 -> 0.4.0.
+      - name: Create and push manifest
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create \
+            -t docker.io/cinpol/siphon:${{ steps.ver.outputs.version }} \
+            -t docker.io/cinpol/siphon:latest \
+            $(printf 'docker.io/cinpol/siphon@sha256:%s ' *)
+
+      - name: Inspect manifest
+        run: docker buildx imagetools inspect docker.io/cinpol/siphon:${{ steps.ver.outputs.version }}
