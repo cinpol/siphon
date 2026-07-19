@@ -24,9 +24,14 @@ builds:
     env:
       - CGO_ENABLED=1
       # amd64 links against the runner's native librados with the system gcc.
-      # arm64 is cross-compiled: point cgo at the arm64 cross-compiler, which
-      # links the arm64 librados installed via multiarch by the release workflow.
+      # arm64 is cross-compiled with the arm64 cross-compiler (the release
+      # workflow provides the arm64 librados to link against).
       - '{{ if eq .Arch "arm64" }}CC=aarch64-linux-gnu-gcc{{ else }}CC=gcc{{ end }}'
+      # The arm64 librados is unpacked without its transitive dependency chain
+      # (libceph-common, boost, ...), which isn't needed at link time — the
+      # target system provides it at runtime. Tell the linker to leave symbols
+      # referenced from within shared libraries unresolved (amd64 needs nothing).
+      - '{{ if eq .Arch "arm64" }}CGO_LDFLAGS=-Wl,--unresolved-symbols=ignore-in-shared-libs{{ else }}CGO_LDFLAGS={{ end }}'
     goos:
       - linux
     goarch:
