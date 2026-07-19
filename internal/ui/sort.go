@@ -69,25 +69,35 @@ func (s *tableSort[T]) handleKey(msg tea.KeyMsg) bool {
 	return false
 }
 
-// decorate returns cols with a ↑/↓ arrow appended to the active sort column's
-// title, reserving a little extra width for it. Call it on the base columns
-// *before* fitColumns so the arrow's width is accounted for. The input slice is
-// not mutated. With nothing sorted it returns the columns unchanged.
+// decorate reserves a 2-cell indicator slot on every sortable column and marks
+// the active one with a ↑/↓ arrow. Reserving the slot on *all* sortable columns
+// (not just the active one) keeps each column's width constant as the active
+// column changes, so the layout never shifts when you sort. Call it on the base
+// columns *before* fitColumns so the reserved width is accounted for. The input
+// slice is not mutated.
 func (s tableSort[T]) decorate(cols []table.Column) []table.Column {
 	out := make([]table.Column, len(cols))
 	copy(out, cols)
-	if s.active < 0 || s.active >= len(s.keys) {
-		return out
+
+	sortable := make(map[string]bool, len(s.keys))
+	for _, k := range s.keys {
+		sortable[k.column] = true
 	}
-	arrow := " ↑"
-	if s.desc {
-		arrow = " ↓"
+	active, arrow := "", ""
+	if s.active >= 0 && s.active < len(s.keys) {
+		active = s.keys[s.active].column
+		arrow = " ↑"
+		if s.desc {
+			arrow = " ↓"
+		}
 	}
-	name := s.keys[s.active].column
 	for i := range out {
-		if out[i].Title == name {
+		if !sortable[out[i].Title] {
+			continue
+		}
+		out[i].Width += 2 // reserved indicator slot — always, so nothing shifts
+		if out[i].Title == active {
 			out[i].Title += arrow
-			out[i].Width += 2 // reserve room so the arrow isn't truncated
 		}
 	}
 	return out

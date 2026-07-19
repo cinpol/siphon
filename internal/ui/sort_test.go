@@ -82,26 +82,34 @@ func TestTableSortDecorate(t *testing.T) {
 	s := newTableSort(sortKey[int]{"PG_NUM", "P", func(a, b int) bool { return a < b }})
 	cols := []table.Column{{Title: "NAME", Width: 10}, {Title: "PG_NUM", Width: 7}}
 
-	// Nothing selected: columns returned unchanged (but a distinct slice).
-	if d := s.decorate(cols); d[1].Title != "PG_NUM" || d[1].Width != 7 {
-		t.Fatalf("unsorted decorate should be a no-op, got %+v", d[1])
+	// Unsorted: the sortable column reserves its 2-cell indicator slot (so the
+	// layout won't shift once sorted) but carries no arrow yet; non-sortable
+	// columns are untouched.
+	unsorted := s.decorate(cols)
+	if unsorted[0].Width != 10 {
+		t.Fatalf("non-sortable column width changed: %+v", unsorted[0])
+	}
+	if unsorted[1].Title != "PG_NUM" || unsorted[1].Width != 9 {
+		t.Fatalf("unsorted sortable column should reserve width without an arrow, got %+v", unsorted[1])
 	}
 
 	s.handleKey(shiftKey("P")) // ascending
-	d := s.decorate(cols)
-	if d[1].Title != "PG_NUM ↑" {
-		t.Fatalf("expected ascending arrow, got %q", d[1].Title)
+	asc := s.decorate(cols)
+	if asc[1].Title != "PG_NUM ↑" {
+		t.Fatalf("expected ascending arrow, got %q", asc[1].Title)
 	}
-	if d[1].Width != 9 {
-		t.Fatalf("expected width reserved for arrow (+2), got %d", d[1].Width)
+	// The invariant that prevents columns jumping: width is identical whether or
+	// not the column is the active sort.
+	if asc[1].Width != unsorted[1].Width {
+		t.Fatalf("sorted width %d != unsorted width %d (columns would jump)", asc[1].Width, unsorted[1].Width)
 	}
 	if cols[1].Title != "PG_NUM" || cols[1].Width != 7 {
 		t.Fatalf("decorate must not mutate its input: %+v", cols[1])
 	}
 
 	s.handleKey(shiftKey("P")) // toggle to descending
-	if d := s.decorate(cols); d[1].Title != "PG_NUM ↓" {
-		t.Fatalf("expected descending arrow, got %q", d[1].Title)
+	if desc := s.decorate(cols); desc[1].Title != "PG_NUM ↓" {
+		t.Fatalf("expected descending arrow, got %q", desc[1].Title)
 	}
 }
 
