@@ -32,26 +32,35 @@ jobs:
         run: |
           set -eux
           sudo dpkg --add-architecture arm64
-
-          # We only need Ubuntu's own repositories here: they carry the arm64
-          # cross-compiler and the Ceph client dev libraries for both arches.
-          # Once arm64 is enabled, `apt update` would also query third-party
-          # repos (Microsoft, Docker, ...) for arm64 indexes they don't publish
-          # and fail, so move everything except Ubuntu's sources out of the way.
-          sudo mkdir -p /tmp/apt-disabled
-          for f in /etc/apt/sources.list.d/*; do
-            case "$f" in
-              */ubuntu.sources) ;;
-              *) [ -e "$f" ] && sudo mv "$f" /tmp/apt-disabled/ ;;
-            esac
-          done
-          [ -s /etc/apt/sources.list ] && sudo mv /etc/apt/sources.list /tmp/apt-disabled/base.list
-
-          # Scope Ubuntu's repos to amd64 and add arm64 from the ports mirror,
-          # pinned to this runner's codename so it survives runner-image bumps.
-          sudo sed -i '/^Types:/a Architectures: amd64' /etc/apt/sources.list.d/ubuntu.sources
           codename="$(. /etc/os-release && echo "$VERSION_CODENAME")"
-          sudo tee /etc/apt/sources.list.d/arm64-ports.sources >/dev/null <<EOF
+
+          # Replace the runner's apt sources with a deterministic pair from
+          # Canonical's canonical mirrors: archive.ubuntu.com for amd64 and
+          # ports.ubuntu.com for arm64. This matters because librados2 is
+          # "Multi-Arch: same" — the amd64 and arm64 copies must be the *exact*
+          # same version to co-install — and only these two canonical mirrors
+          # are published in lockstep. The runner's default mirror can lag ports
+          # and break that. Each source is scoped to a single architecture so
+          # neither is queried for the other. Third-party repos are dropped: we
+          # only need Ubuntu's own repos (cross-compiler + Ceph client libs).
+          sudo rm -f /etc/apt/sources.list
+          sudo mkdir -p /tmp/apt-disabled
+          sudo find /etc/apt/sources.list.d -maxdepth 1 -type f -exec mv {} /tmp/apt-disabled/ \;
+          sudo tee /etc/apt/sources.list.d/ubuntu.sources >/dev/null <<EOF
+          Types: deb
+          URIs: http://archive.ubuntu.com/ubuntu
+          Suites: ${codename} ${codename}-updates ${codename}-backports
+          Components: main universe restricted multiverse
+          Architectures: amd64
+          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+
+          Types: deb
+          URIs: http://security.ubuntu.com/ubuntu
+          Suites: ${codename}-security
+          Components: main universe restricted multiverse
+          Architectures: amd64
+          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+
           Types: deb
           URIs: http://ports.ubuntu.com/ubuntu-ports
           Suites: ${codename} ${codename}-updates ${codename}-backports ${codename}-security
@@ -61,10 +70,25 @@ jobs:
           EOF
 
           sudo apt-get update
+          # amd64 build: dev packages give the headers (arch-independent, so they
+          # serve both builds) and the amd64 libraries. The cross-compiler builds
+          # arm64 object code.
           sudo apt-get install -y \
             gcc-aarch64-linux-gnu \
-            librados-dev librbd-dev \
-            librados-dev:arm64 librbd-dev:arm64
+            librados-dev librbd-dev
+
+          # arm64 build: the Ubuntu Ceph packages are Multi-Arch: no, so the
+          # arm64 libraries can't be co-installed alongside the amd64 ones via
+          # apt. Instead fetch the arm64 runtime .debs and unpack them into place
+          # WITHOUT registering them with dpkg (no conflict) — enough to link
+          # against. Then add the linker symlinks a -dev package would provide,
+          # so cgo's `-lrados`/`-lrbd` resolve when cross-compiling.
+          tmp="$(mktemp -d)"
+          ( cd "$tmp" && apt-get download librados2:arm64 librbd1:arm64 )
+          for deb in "$tmp"/*.deb; do sudo dpkg-deb -x "$deb" /; done
+          rm -rf "$tmp"
+          sudo ln -sf librados.so.2 /usr/lib/aarch64-linux-gnu/librados.so
+          sudo ln -sf librbd.so.1 /usr/lib/aarch64-linux-gnu/librbd.so
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
