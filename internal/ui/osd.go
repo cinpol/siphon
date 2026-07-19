@@ -74,6 +74,7 @@ type osdModel struct {
 	weight    textinput.Model
 	weightErr bool
 	filter    tableFilter
+	sort      tableSort[model.OSD]
 	pendingOp service.Operation
 	opErr     error
 
@@ -92,7 +93,40 @@ func newOSDModel(svc *service.Service) osdModel {
 	w.Placeholder = "0.00 – 1.00"
 	w.CharLimit = 5
 
-	return osdModel{svc: svc, keys: defaultOSDKeys(), table: t, weight: w, filter: newTableFilter(), loading: true}
+	return osdModel{
+		svc:     svc,
+		keys:    defaultOSDKeys(),
+		table:   t,
+		weight:  w,
+		filter:  newTableFilter(),
+		sort:    newOSDSort(),
+		loading: true,
+	}
+}
+
+// newOSDSort defines the OSD table's sort columns. Each key is Shift+<letter>
+// (k9s-style), matching the column's initial.
+func newOSDSort() tableSort[model.OSD] {
+	return newTableSort(
+		sortKey[model.OSD]{"ID", "I", func(a, b model.OSD) bool { return a.ID < b.ID }},
+		sortKey[model.OSD]{"REWEIGHT", "R", func(a, b model.OSD) bool { return a.Reweight < b.Reweight }},
+		sortKey[model.OSD]{"%USE", "U", func(a, b model.OSD) bool { return a.UsedRatio < b.UsedRatio }},
+		sortKey[model.OSD]{"PGS", "P", func(a, b model.OSD) bool { return a.PGs < b.PGs }},
+		sortKey[model.OSD]{"SIZE", "S", func(a, b model.OSD) bool { return a.SizeBytes < b.SizeBytes }},
+	)
+}
+
+// applyColumns sets the table columns for the current width, adding the active
+// sort column's ↑/↓ arrow. Called on resize and whenever the sort changes.
+func (m *osdModel) applyColumns() {
+	m.table.SetColumns(fitColumns(m.sort.decorate(osdColumns()), m.width))
+}
+
+// refreshRows re-sorts the OSD slice and rebuilds the (filtered) table rows.
+// Sorting in place keeps the filter's row→source map and the selection valid.
+func (m *osdModel) refreshRows() {
+	m.sort.apply(m.osds)
+	m.table.SetRows(m.filter.apply(osdRows(m.osds)))
 }
 
 type (
@@ -154,12 +188,13 @@ func (m osdModel) actions() []Action {
 		act(m.keys.Destroy, true),
 		act(m.keys.Purge, true),
 		act(m.keys.Remove, true),
+		m.sort.hint(),
 	}
 }
 
 func (m *osdModel) setSize(width, height int) {
 	m.width, m.height = width, height
-	m.table.SetColumns(fitColumns(osdColumns(), width))
+	m.applyColumns()
 	if height > 2 {
 		m.table.SetHeight(height - 1) // leave a line for the table header
 	}
@@ -172,7 +207,7 @@ func (m osdModel) Update(msg tea.Msg) (osdModel, tea.Cmd) {
 		m.err = nil
 		m.opErr = nil // a fresh, successful load clears any stale op error
 		m.loading = false
-		m.table.SetRows(m.filter.apply(osdRows(m.osds)))
+		m.refreshRows()
 		return m, nil
 	case osdErrMsg:
 		m.err = msg.err
@@ -233,7 +268,7 @@ func (m osdModel) handleKey(msg tea.KeyMsg) (osdModel, tea.Cmd) {
 			m.detail = false
 		case m.filter.applied():
 			m.filter.clear()
-			m.table.SetRows(m.filter.apply(osdRows(m.osds)))
+			m.refreshRows()
 		}
 		return m, nil
 	}
@@ -246,6 +281,14 @@ func (m osdModel) handleKey(msg tea.KeyMsg) (osdModel, tea.Cmd) {
 // dispatch runs a normal-mode action from a direct hotkey. (Enter is handled in
 // handleKey — it opens the detail view — so it never reaches here.)
 func (m osdModel) dispatch(msg tea.KeyMsg) (osdModel, tea.Cmd) {
+	// Shift+<column> re-sorts the table (k9s-style). The sort keys (uppercase)
+	// don't overlap with the lowercase operation hotkeys.
+	if m.sort.handleKey(msg) {
+		m.applyColumns()
+		m.refreshRows()
+		return m, nil
+	}
+
 	if key.Matches(msg, m.keys.Filter) {
 		return m, m.filter.open()
 	}

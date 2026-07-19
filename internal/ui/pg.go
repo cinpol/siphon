@@ -58,6 +58,7 @@ type pgModel struct {
 	filtering    bool
 	problemsOnly bool
 	problemFlags []string // PG state flags treated as problems (config-resolved)
+	sort         tableSort[model.PG]
 	detail       bool
 
 	confirming bool
@@ -79,7 +80,21 @@ func newPGModel(svc *service.Service, problemFlags []string) pgModel {
 	fi.Prompt = "/"
 	fi.CharLimit = 32
 
-	return pgModel{svc: svc, keys: defaultPGKeys(), table: t, filterInput: fi, problemFlags: problemFlags, loading: true}
+	return pgModel{svc: svc, keys: defaultPGKeys(), table: t, filterInput: fi, problemFlags: problemFlags, sort: newPGSort(), loading: true}
+}
+
+// newPGSort defines the PG table's sort columns. Only OBJECTS is offered
+// (Shift+O); the other columns are identifiers/sets that don't sort meaningfully.
+func newPGSort() tableSort[model.PG] {
+	return newTableSort(
+		sortKey[model.PG]{"OBJECTS", "O", func(a, b model.PG) bool { return a.Objects < b.Objects }},
+	)
+}
+
+// applyColumns sets the table columns for the current width, adding the active
+// sort column's ↑/↓ arrow. Called on resize and whenever the sort changes.
+func (m *pgModel) applyColumns() {
+	m.table.SetColumns(fitColumns(m.sort.decorate(pgColumns()), m.width))
 }
 
 type (
@@ -125,12 +140,13 @@ func (m pgModel) actions() []Action {
 		act(m.keys.Scrub, false),
 		act(m.keys.DeepScrub, false),
 		act(m.keys.Repair, false),
+		m.sort.hint(),
 	}
 }
 
 func (m *pgModel) setSize(width, height int) {
 	m.width, m.height = width, height
-	m.table.SetColumns(fitColumns(pgColumns(), width))
+	m.applyColumns()
 	if height > 2 {
 		m.table.SetHeight(height - 1)
 	}
@@ -222,6 +238,14 @@ func (m pgModel) handleKey(msg tea.KeyMsg) (pgModel, tea.Cmd) {
 
 // dispatch runs a normal-mode action from a direct hotkey.
 func (m pgModel) dispatch(msg tea.KeyMsg) (pgModel, tea.Cmd) {
+	// Shift+<column> re-sorts the table (k9s-style). rebuild re-applies the sort
+	// to the visible set. The sort key (uppercase) doesn't overlap the hotkeys.
+	if m.sort.handleKey(msg) {
+		m.applyColumns()
+		m.rebuild()
+		return m, nil
+	}
+
 	switch {
 	case key.Matches(msg, m.keys.Filter):
 		m.filtering = true
@@ -269,6 +293,7 @@ func (m *pgModel) rebuild() {
 		}
 		m.visible = append(m.visible, pg)
 	}
+	m.sort.apply(m.visible) // order the displayed set; selection maps into m.visible
 	m.table.SetRows(pgRows(m.visible))
 	if m.table.Cursor() >= len(m.visible) {
 		m.table.GotoTop()

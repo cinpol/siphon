@@ -46,7 +46,8 @@ Siphon gives you:
 ## Features
 
 - **Dashboard** — health (with a scrollable `ceph health detail`), capacity (cluster-wide plus the fullest pools), client IO and recovery, refreshed live.
-- **OSDs** — mark in/out, reweight, destroy/purge/remove, metadata and utilisation.
+- **OSDs** — mark in/out, reweight, destroy/purge/remove, metadata and
+  utilisation; sort by id, reweight, %use, pgs or size.
 - **Pools** — create, edit (size/min_size/PG/autoscale/rule), delete; browse and
   sort by `pg_num`, `%used`, stored or objects, with per-pool usage shown.
 - **CRUSH** — interactive hierarchy tree; move buckets, view rules.
@@ -54,7 +55,8 @@ Siphon gives you:
 - **Services** — cephadm services and daemons; restart, start, stop. On
   non-cephadm clusters (Rook, manual) it detects this and shows a read-only
   daemon inventory (`ceph node ls`) instead of failing.
-- **Placement groups** — cluster-wide listing, live filter, scrub / deep-scrub / repair.
+- **Placement groups** — cluster-wide listing, live filter, sort by objects,
+  scrub / deep-scrub / repair.
 - **Consistent UX** — `/` filters any table, `:` command prompt, and `y`/`n`
   confirmations that always preview the equivalent `ceph` command.
 
@@ -214,8 +216,9 @@ to explicitly run against the built-in demo cluster.
 
 - `1`–`7` — switch views; `:` — command prompt (e.g. `:osd`)
 - `/` — filter the current table live
-- `⇧`+column — sort a table by that column (Pools: `⇧N` name, `⇧P` pg_num,
-  `⇧U` %used, `⇧S` stored, `⇧O` objects); press again to reverse
+- `⇧`+column — sort a table by that column; press again to reverse. Pools:
+  `⇧N/P/U/S/O` (name/pg_num/%used/stored/objects); OSDs: `⇧I/R/U/P/S`
+  (id/reweight/%use/pgs/size); PGs: `⇧O` (objects)
 - `Enter` — details for the selected item; on the Dashboard it opens a scrollable
   `ceph health detail`. Context actions use the shortcut keys shown in the header
 - Inside the Health-detail overlay: `↑`/`↓`, `PgUp`/`PgDn`, `g`/`G` scroll; `Esc` closes

@@ -156,3 +156,52 @@ func poolPGNums(pools []model.Pool) []int {
 	}
 	return out
 }
+
+// TestOSDViewSortByPGs drives the OSD view: Shift+P orders the table ascending
+// by pg count, and pressing again toggles to descending.
+func TestOSDViewSortByPGs(t *testing.T) {
+	om := newOSDModel(service.New(mock.New()))
+	om.setSize(120, 30)
+	om, _ = om.Update(om.fetch()())
+	if len(om.osds) < 2 {
+		t.Skip("mock has too few OSDs to exercise sorting")
+	}
+
+	om, _ = om.Update(shiftKey("P")) // ascending by PGS
+	for i := 1; i < len(om.osds); i++ {
+		if om.osds[i-1].PGs > om.osds[i].PGs {
+			t.Fatalf("OSDs not ascending by pgs at %d: %d > %d", i, om.osds[i-1].PGs, om.osds[i].PGs)
+		}
+	}
+	if got := om.sort.hint().Label; got != "Sort: pgs ↑" {
+		t.Fatalf("expected ascending pgs hint, got %q", got)
+	}
+
+	om, _ = om.Update(shiftKey("P")) // toggle → descending
+	for i := 1; i < len(om.osds); i++ {
+		if om.osds[i-1].PGs < om.osds[i].PGs {
+			t.Fatalf("OSDs not descending by pgs at %d: %d < %d", i, om.osds[i-1].PGs, om.osds[i].PGs)
+		}
+	}
+}
+
+// TestPGViewSortByObjects drives the PG view: Shift+O orders the visible set
+// ascending by object count.
+func TestPGViewSortByObjects(t *testing.T) {
+	pm := newPGModel(service.New(mock.New()), model.DefaultPGProblemFlags)
+	pm.setSize(120, 30)
+	pm, _ = pm.Update(pm.fetch()())
+	if len(pm.visible) < 2 {
+		t.Skip("mock has too few PGs to exercise sorting")
+	}
+
+	pm, _ = pm.Update(shiftKey("O")) // ascending by OBJECTS
+	for i := 1; i < len(pm.visible); i++ {
+		if pm.visible[i-1].Objects > pm.visible[i].Objects {
+			t.Fatalf("PGs not ascending by objects at %d: %d > %d", i, pm.visible[i-1].Objects, pm.visible[i].Objects)
+		}
+	}
+	if got := pm.sort.hint().Label; got != "Sort: objects ↑" {
+		t.Fatalf("expected ascending objects hint, got %q", got)
+	}
+}
