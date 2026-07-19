@@ -29,11 +29,15 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-# VERSION is stamped into the binary; the release workflow overrides it with the
-# tag. buildvcs is off because the build context has no .git (see .dockerignore).
+# Build metadata stamped into the binary. The release workflow passes the tag
+# version, short commit and build date; a plain `docker build` gets the
+# defaults. buildvcs is off because the build context has no .git (see
+# .dockerignore), so these are passed in rather than read from git.
 ARG VERSION=dev
+ARG COMMIT=none
+ARG DATE=unknown
 RUN CGO_ENABLED=1 go build -tags goceph -buildvcs=false \
-    -ldflags "-X github.com/cinpol/siphon/internal/version.Version=${VERSION}" \
+    -ldflags "-X github.com/cinpol/siphon/internal/version.Version=${VERSION} -X github.com/cinpol/siphon/internal/version.Commit=${COMMIT} -X github.com/cinpol/siphon/internal/version.Date=${DATE}" \
     -o /out/siphon ./cmd/siphon
 
 # ---- runtime: slim image with just the Ceph client shared libraries ----

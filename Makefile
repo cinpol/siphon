@@ -38,7 +38,7 @@ build-mock:
 
 ## docker: build the container image (bundles the Ceph client; needs Docker)
 docker:
-	docker build --build-arg CEPH_RELEASE=$(CEPH_RELEASE) --build-arg VERSION=$(VERSION) -t $(IMAGE):dev .
+	docker build --build-arg CEPH_RELEASE=$(CEPH_RELEASE) --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg DATE=$(DATE) -t $(IMAGE):dev .
 
 ## test: run the test suite
 test:
