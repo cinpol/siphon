@@ -73,6 +73,7 @@ type poolModel struct {
 	form      components.Form
 	confirm   components.Confirm
 	filter    tableFilter
+	sort      tableSort[model.Pool]
 	pendingOp service.Operation
 	editing   model.Pool
 	opErr     error
@@ -88,7 +89,40 @@ func newPoolModel(svc *service.Service) poolModel {
 		table.WithFocused(true),
 	)
 	t.SetStyles(osdTableStyles())
-	return poolModel{svc: svc, keys: defaultPoolKeys(), table: t, filter: newTableFilter(), loading: true}
+	return poolModel{
+		svc:     svc,
+		keys:    defaultPoolKeys(),
+		table:   t,
+		filter:  newTableFilter(),
+		sort:    newPoolSort(),
+		loading: true,
+	}
+}
+
+// newPoolSort defines the Pools table's sort columns. Each key is Shift+<letter>
+// (k9s-style), matching the column's initial. Replica size isn't a sort column
+// (it rarely drives browsing), which frees ⇧S for STORED.
+func newPoolSort() tableSort[model.Pool] {
+	return newTableSort(
+		sortKey[model.Pool]{"NAME", "N", func(a, b model.Pool) bool { return a.Name < b.Name }},
+		sortKey[model.Pool]{"PG_NUM", "P", func(a, b model.Pool) bool { return a.PGNum < b.PGNum }},
+		sortKey[model.Pool]{"%USED", "U", func(a, b model.Pool) bool { return a.UsedRatio < b.UsedRatio }},
+		sortKey[model.Pool]{"STORED", "S", func(a, b model.Pool) bool { return a.StoredBytes < b.StoredBytes }},
+		sortKey[model.Pool]{"OBJECTS", "O", func(a, b model.Pool) bool { return a.Objects < b.Objects }},
+	)
+}
+
+// applyColumns sets the table columns for the current width, adding the active
+// sort column's ↑/↓ arrow. Called on resize and whenever the sort changes.
+func (m *poolModel) applyColumns() {
+	m.table.SetColumns(fitColumns(m.sort.decorate(poolColumns()), m.width))
+}
+
+// refreshRows re-sorts the pool slice and rebuilds the (filtered) table rows.
+// Sorting in place keeps the filter's row→source map and the selection valid.
+func (m *poolModel) refreshRows() {
+	m.sort.apply(m.pools)
+	m.table.SetRows(m.filter.apply(poolRows(m.pools)))
 }
 
 type (
@@ -126,12 +160,13 @@ func (m poolModel) actions() []Action {
 		act(m.keys.Create, false),
 		act(m.keys.Edit, false),
 		act(m.keys.Delete, true),
+		m.sort.hint(),
 	}
 }
 
 func (m *poolModel) setSize(width, height int) {
 	m.width, m.height = width, height
-	m.table.SetColumns(fitColumns(poolColumns(), width))
+	m.applyColumns()
 	if height > 2 {
 		m.table.SetHeight(height - 1)
 	}
@@ -144,7 +179,7 @@ func (m poolModel) Update(msg tea.Msg) (poolModel, tea.Cmd) {
 		m.err = nil
 		m.opErr = nil // a fresh, successful load clears any stale op error
 		m.loading = false
-		m.table.SetRows(m.filter.apply(poolRows(m.pools)))
+		m.refreshRows()
 		return m, nil
 	case poolErrMsg:
 		m.err = msg.err
@@ -201,7 +236,7 @@ func (m poolModel) handleKey(msg tea.KeyMsg) (poolModel, tea.Cmd) {
 			m.detail = false
 		case m.filter.applied():
 			m.filter.clear()
-			m.table.SetRows(m.filter.apply(poolRows(m.pools)))
+			m.refreshRows()
 		}
 		return m, nil
 	}
@@ -214,6 +249,14 @@ func (m poolModel) handleKey(msg tea.KeyMsg) (poolModel, tea.Cmd) {
 // dispatch runs a normal-mode action from a direct hotkey. (Enter is handled in
 // handleKey — it opens the detail view — so it never reaches here.)
 func (m poolModel) dispatch(msg tea.KeyMsg) (poolModel, tea.Cmd) {
+	// Shift+<column> re-sorts the table (k9s-style). Handled before the other
+	// hotkeys, though the sort keys (uppercase) don't overlap with them.
+	if m.sort.handleKey(msg) {
+		m.applyColumns()
+		m.refreshRows()
+		return m, nil
+	}
+
 	switch {
 	case key.Matches(msg, m.keys.Filter):
 		return m, m.filter.open()
@@ -405,8 +448,10 @@ func poolColumns() []table.Column {
 		{Title: "SIZE", Width: 5},
 		{Title: "MIN_SIZE", Width: 8},
 		{Title: "PG_NUM", Width: 7},
+		{Title: "PGP_NUM", Width: 8},
 		{Title: "AUTOSCALE", Width: 9},
 		{Title: "%USED", Width: 6},
+		{Title: "STORED", Width: 9},
 		{Title: "OBJECTS", Width: 8},
 		{Title: "APPS", Width: 10},
 	}
@@ -421,8 +466,10 @@ func poolRows(pools []model.Pool) []table.Row {
 			strconv.Itoa(p.Size),
 			strconv.Itoa(p.MinSize),
 			strconv.Itoa(p.PGNum),
+			strconv.Itoa(p.PGPNum),
 			p.AutoscaleMode,
 			format.Percent(p.UsedRatio),
+			format.Bytes(p.StoredBytes),
 			format.Count(p.Objects),
 			strings.Join(p.Applications, ","),
 		})
