@@ -67,7 +67,7 @@ Siphon gives you:
 
 ### Download a prebuilt binary (recommended)
 
-Prebuilt **linux/amd64** binaries are attached to each
+Prebuilt **linux/amd64** and **linux/arm64** binaries are attached to each
 [GitHub Release](https://github.com/cinpol/siphon/releases). Install the Ceph
 client runtime libraries first:
 
@@ -79,28 +79,29 @@ sudo dnf install -y librados2 librbd1
 ```
 
 Then download, verify and install the binary (replace `v0.4.0` with the latest
-release):
+release; `ARCH` picks amd64 or arm64):
 
 ```sh
 VERSION=v0.4.0
+ARCH=amd64            # or arm64
 BASE="https://github.com/cinpol/siphon/releases/download/$VERSION"
 
-curl -LO "$BASE/siphon_${VERSION#v}_linux_amd64.tar.gz"
+curl -LO "$BASE/siphon_${VERSION#v}_linux_${ARCH}.tar.gz"
 curl -LO "$BASE/checksums.txt"
 
 # Verify the download
 sha256sum --ignore-missing -c checksums.txt
 
 # Extract and install
-tar xzf "siphon_${VERSION#v}_linux_amd64.tar.gz"
+tar xzf "siphon_${VERSION#v}_linux_${ARCH}.tar.gz"
 sudo install -m 0755 siphon /usr/local/bin/siphon
 
 siphon --version
 sudo siphon          # --client auto
 ```
 
-`arm64` and other package channels (Homebrew, deb/rpm) are planned for later
-releases — until then, other platforms build from source.
+Other package channels (Homebrew, deb/rpm) are planned for later releases —
+until then, other platforms build from source.
 
 ### Build from source
 
@@ -118,13 +119,16 @@ authenticate the way the `ceph` CLI does.
 
 ### Run in a container
 
-A prebuilt image (with the Ceph client libraries bundled) is on Docker Hub:
+A prebuilt, multi-arch image (`linux/amd64` + `linux/arm64`, with the Ceph
+client libraries bundled) is on Docker Hub:
 
 ```sh
 docker run --rm -it -v /etc/ceph:/etc/ceph:ro docker.io/cinpol/siphon
 ```
 
-Works against any cluster the container can reach. See
+Docker pulls the right architecture automatically, so on an Apple Silicon Mac
+the image runs natively (no emulation). Works against any cluster the container
+can reach. See
 [docs/docker.md](docs/docker.md), and for Kubernetes
 [docs/kubernetes.md](docs/kubernetes.md) (any cluster) or
 [docs/rook.md](docs/rook.md) (Rook-Ceph).
@@ -148,8 +152,8 @@ make build-mock
 | Platform | Status | Notes |
 |----------|:------:|-------|
 | Linux `amd64` | ✅ | Prebuilt binaries; the primary tested target. |
-| Linux `arm64` | ⚠️ | Should build from source; prebuilt binaries are planned and it is not yet tested. |
-| macOS / Windows | ❌ | librados is not available; only the mock client runs, for development/demos. |
+| Linux `arm64` | ✅ | Prebuilt binaries; the container image is multi-arch too. |
+| macOS / Windows | ❌ | librados is not available natively; only the mock client runs, for development/demos. On Apple Silicon the multi-arch container image runs natively — use it to reach a real cluster. |
 
 ### Ceph releases
 

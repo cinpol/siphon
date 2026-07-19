@@ -20,6 +20,10 @@ docker run --rm -it -v /etc/ceph:/etc/ceph:ro docker.io/cinpol/siphon
 This works against **any** cluster the host can reach — cephadm, manual, or
 external. If `ceph -s` works on the host, Siphon connects.
 
+The image is **multi-arch** (`linux/amd64` + `linux/arm64`); Docker pulls the
+architecture matching your host, so it runs natively on both x86-64 and arm64
+(including Apple Silicon Macs, without emulation).
+
 Notes:
 
 - The container needs network access to the cluster's MONs. Default bridge

@@ -1,12 +1,16 @@
 # GoReleaser configuration for Siphon.
 #
-# The real (cluster-capable) binary links librados/librbd via cgo, which cannot
-# be cross-compiled, so we build linux/amd64 natively on an amd64 host that has
-# the Ceph client development headers installed (see .github/workflows/release.yml
-# and the README). arm64 is intentionally deferred to a later release.
+# The real (cluster-capable) binary links librados/librbd via cgo. GoReleaser
+# runs once on an amd64 host and builds both architectures in that single run:
+#   - amd64 natively, with the default gcc;
+#   - arm64 cross-compiled, using aarch64-linux-gnu-gcc and the arm64 librados
+#     installed via multiarch (the release workflow sets that toolchain up).
+# Keeping it to one run makes GoReleaser the single source of truth for the
+# release: one archive per arch, one checksums file, one changelog.
+# See .github/workflows/release.yml for the toolchain setup.
 #
-# Validate locally without publishing (on a host with librados-dev installed):
-#   goreleaser release --snapshot --clean
+# Validate this config without publishing:
+#   goreleaser check
 version: 2
 
 project_name: siphon
@@ -15,14 +19,19 @@ builds:
   - id: siphon
     main: ./cmd/siphon
     binary: siphon
-    env:
-      - CGO_ENABLED=1
     tags:
       - goceph
+    env:
+      - CGO_ENABLED=1
+      # amd64 links against the runner's native librados with the system gcc.
+      # arm64 is cross-compiled: point cgo at the arm64 cross-compiler, which
+      # links the arm64 librados installed via multiarch by the release workflow.
+      - '{{ if eq .Arch "arm64" }}CC=aarch64-linux-gnu-gcc{{ else }}CC=gcc{{ end }}'
     goos:
       - linux
     goarch:
       - amd64
+      - arm64
     ldflags:
       - -s -w
       - -X github.com/cinpol/siphon/internal/version.Version={{ .Version }}
