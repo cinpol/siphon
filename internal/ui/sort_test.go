@@ -82,26 +82,34 @@ func TestTableSortDecorate(t *testing.T) {
 	s := newTableSort(sortKey[int]{"PG_NUM", "P", func(a, b int) bool { return a < b }})
 	cols := []table.Column{{Title: "NAME", Width: 10}, {Title: "PG_NUM", Width: 7}}
 
-	// Nothing selected: columns returned unchanged (but a distinct slice).
-	if d := s.decorate(cols); d[1].Title != "PG_NUM" || d[1].Width != 7 {
-		t.Fatalf("unsorted decorate should be a no-op, got %+v", d[1])
+	// Unsorted: the sortable column reserves its 2-cell indicator slot (so the
+	// layout won't shift once sorted) but carries no arrow yet; non-sortable
+	// columns are untouched.
+	unsorted := s.decorate(cols)
+	if unsorted[0].Width != 10 {
+		t.Fatalf("non-sortable column width changed: %+v", unsorted[0])
+	}
+	if unsorted[1].Title != "PG_NUM" || unsorted[1].Width != 9 {
+		t.Fatalf("unsorted sortable column should reserve width without an arrow, got %+v", unsorted[1])
 	}
 
 	s.handleKey(shiftKey("P")) // ascending
-	d := s.decorate(cols)
-	if d[1].Title != "PG_NUM ↑" {
-		t.Fatalf("expected ascending arrow, got %q", d[1].Title)
+	asc := s.decorate(cols)
+	if asc[1].Title != "PG_NUM ↑" {
+		t.Fatalf("expected ascending arrow, got %q", asc[1].Title)
 	}
-	if d[1].Width != 9 {
-		t.Fatalf("expected width reserved for arrow (+2), got %d", d[1].Width)
+	// The invariant that prevents columns jumping: width is identical whether or
+	// not the column is the active sort.
+	if asc[1].Width != unsorted[1].Width {
+		t.Fatalf("sorted width %d != unsorted width %d (columns would jump)", asc[1].Width, unsorted[1].Width)
 	}
 	if cols[1].Title != "PG_NUM" || cols[1].Width != 7 {
 		t.Fatalf("decorate must not mutate its input: %+v", cols[1])
 	}
 
 	s.handleKey(shiftKey("P")) // toggle to descending
-	if d := s.decorate(cols); d[1].Title != "PG_NUM ↓" {
-		t.Fatalf("expected descending arrow, got %q", d[1].Title)
+	if desc := s.decorate(cols); desc[1].Title != "PG_NUM ↓" {
+		t.Fatalf("expected descending arrow, got %q", desc[1].Title)
 	}
 }
 
@@ -155,4 +163,53 @@ func poolPGNums(pools []model.Pool) []int {
 		out[i] = p.PGNum
 	}
 	return out
+}
+
+// TestOSDViewSortByPGs drives the OSD view: Shift+P orders the table ascending
+// by pg count, and pressing again toggles to descending.
+func TestOSDViewSortByPGs(t *testing.T) {
+	om := newOSDModel(service.New(mock.New()))
+	om.setSize(120, 30)
+	om, _ = om.Update(om.fetch()())
+	if len(om.osds) < 2 {
+		t.Skip("mock has too few OSDs to exercise sorting")
+	}
+
+	om, _ = om.Update(shiftKey("P")) // ascending by PGS
+	for i := 1; i < len(om.osds); i++ {
+		if om.osds[i-1].PGs > om.osds[i].PGs {
+			t.Fatalf("OSDs not ascending by pgs at %d: %d > %d", i, om.osds[i-1].PGs, om.osds[i].PGs)
+		}
+	}
+	if got := om.sort.hint().Label; got != "Sort: pgs ↑" {
+		t.Fatalf("expected ascending pgs hint, got %q", got)
+	}
+
+	om, _ = om.Update(shiftKey("P")) // toggle → descending
+	for i := 1; i < len(om.osds); i++ {
+		if om.osds[i-1].PGs < om.osds[i].PGs {
+			t.Fatalf("OSDs not descending by pgs at %d: %d < %d", i, om.osds[i-1].PGs, om.osds[i].PGs)
+		}
+	}
+}
+
+// TestPGViewSortByObjects drives the PG view: Shift+O orders the visible set
+// ascending by object count.
+func TestPGViewSortByObjects(t *testing.T) {
+	pm := newPGModel(service.New(mock.New()), model.DefaultPGProblemFlags)
+	pm.setSize(120, 30)
+	pm, _ = pm.Update(pm.fetch()())
+	if len(pm.visible) < 2 {
+		t.Skip("mock has too few PGs to exercise sorting")
+	}
+
+	pm, _ = pm.Update(shiftKey("O")) // ascending by OBJECTS
+	for i := 1; i < len(pm.visible); i++ {
+		if pm.visible[i-1].Objects > pm.visible[i].Objects {
+			t.Fatalf("PGs not ascending by objects at %d: %d > %d", i, pm.visible[i-1].Objects, pm.visible[i].Objects)
+		}
+	}
+	if got := pm.sort.hint().Label; got != "Sort: objects ↑" {
+		t.Fatalf("expected ascending objects hint, got %q", got)
+	}
 }
