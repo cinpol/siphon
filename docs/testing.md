@@ -5,9 +5,12 @@ decide it "supports" a given Ceph release. If you just want to build and run the
 project, start with [CONTRIBUTING.md](../CONTRIBUTING.md) and the README's
 **Requirements** section instead.
 
-Siphon targets three Ceph releases at go-live — **Reef (18)**, **Squid (19)**
-and **Tentacle (20)**. That list lives in one place, `internal/version`
-(`version.Supported`), and the decoding layer (`internal/ceph/decode`) reads it
+Siphon is tested against three Ceph releases — **Squid (19)**, **Tentacle
+(20)** and **Umbrella (21)**. **Reef (18)** is best-effort: it is still
+recognised and its frozen fixtures still run, but it is no longer built in CI or
+re-tested (see [Reef: frozen fixtures](#reef-frozen-fixtures)). The releases
+Siphon recognises live in one place, `internal/version` (the release vars +
+`byMajor`), and the decoding layer (`internal/ceph/decode`) reads it
 to adapt when Ceph's admin-command JSON differs between releases.
 
 ## Two separate questions
@@ -41,15 +44,17 @@ smoke-tested with `--version` (which links `librados` and exits — no cluster
 needed):
 
 - **`build`** — does it build on each supported **distro** (Ubuntu 22.04/24.04,
-  Debian 12/13, AlmaLinux 9), using that distro's natural client source?
+  Debian 12/13, AlmaLinux 9/10), using that distro's natural client source?
   Debian/Ubuntu install their own `librados-dev`/`librbd-dev`; the RHEL family
   ships no `librados-devel`, so those images pull it from the upstream Ceph repo
-  pinned to the `CEPH_RELEASE` env default (currently `squid`).
+  pinned to the `CEPH_RELEASE` env default (currently `umbrella`, which
+  publishes both el9 and el10).
 
-- **`release-build`** — does it build against each supported Ceph **release**?
-  A dedicated job whose matrix pins each release from the upstream repo on a
-  matching AlmaLinux base. `el9` carries every supported release; `el10`
-  currently only exists for tentacle, so that's the sole el10 cell:
+- **`release-build`** — does it build against each tested Ceph **release**
+  (Reef is best-effort and not built)? A dedicated job whose matrix pins each
+  release from the upstream repo on a matching AlmaLinux base. `el9` carries
+  every tested release; `el10` exists for tentacle and umbrella only (squid
+  publishes no el10):
 
   ```yaml
   release-build:
@@ -57,10 +62,11 @@ needed):
     strategy:
       matrix:
         include:
-          - { ceph: reef,     el: 9,  image: almalinux:9 }
           - { ceph: squid,    el: 9,  image: almalinux:9 }
           - { ceph: tentacle, el: 9,  image: almalinux:9 }
           - { ceph: tentacle, el: 10, image: almalinux:10 }
+          - { ceph: umbrella, el: 9,  image: almalinux:9 }
+          - { ceph: umbrella, el: 10, image: almalinux:10 }
     # …installs librados-devel from
     #   https://download.ceph.com/rpm-${{ matrix.ceph }}/el${{ matrix.el }}/$basearch
     #   then: go build -tags goceph -buildvcs=false && siphon --version
@@ -69,7 +75,7 @@ needed):
 When adding a future release, add a cell and confirm the upstream repo publishes
 `librados-devel` for that release on the chosen `el` — check
 `download.ceph.com/rpm-<release>/el<n>/`; not every release builds for every EL
-version (e.g. only tentacle publishes `el10` today).
+version (e.g. squid publishes no `el10`).
 
 ### Building against a specific release locally
 
@@ -141,10 +147,12 @@ internal/ceph/decode/testdata/
   reef/       health.json  osd_df_tree.json  pg_ls.json  df.json  ...
   squid/      health.json  osd_df_tree.json  pg_ls.json  df.json  ...
   tentacle/   health.json  osd_df_tree.json  pg_ls.json  df.json  ...
+  umbrella/   health.json  osd_df_tree.json  pg_ls.json  df.json  ...
 ```
 
-All three supported releases are covered today; a new one is added just by
-dropping its `testdata/<release>/` directory in. When Ceph changes a schema in a
+All three tested releases are covered, plus Reef's frozen set; a new one is
+added just by dropping its `testdata/<release>/` directory in — `TestFixtures`
+discovers it automatically. When Ceph changes a schema in a
 new release, the failing decode test tells us exactly what drifted — before a
 user hits it.
 
@@ -153,7 +161,7 @@ recipe below). This is the full set of admin commands Siphon decodes — one
 file each:
 
 ```sh
-REL=squid   # or reef / tentacle — the release this cluster runs
+REL=umbrella   # or squid / tentacle — the release this cluster runs
 DIR=internal/ceph/decode/testdata/$REL
 mkdir -p "$DIR"
 
@@ -178,6 +186,13 @@ internal IPs/FSIDs/hostnames are committed as-is; if you capture from a cluster
 whose addressing is sensitive, sanitize it first — the tests assert structure,
 not values, so placeholder values pass just the same.
 
+### Reef: frozen fixtures
+
+`testdata/reef/` is kept as captured and is not re-captured or extended. If a
+future change breaks the Reef decode test, the Reef test case and
+`testdata/reef/` are removed rather than fixed — Reef is best-effort, and its
+fixtures are not a reason to keep code that the tested releases don't need.
+
 ### Live functional runs on a disposable cluster
 
 Fixtures cover decoding; they don't cover the *write* side (that an operation
@@ -196,6 +211,13 @@ against a throwaway cluster of the target release. Two low-cost options:
   sudo siphon --client auto
   ```
 
+  **Umbrella 21.2.0:** its `cephadm` (binary and packages) is built as a
+  development build whose default image is the CI image
+  `quay.ceph.io/ceph-ci/ceph:main`. Pin the release image when bootstrapping:
+  `sudo ./cephadm --image quay.io/ceph/ceph:v21.2.0 bootstrap --mon-ip <VM_IP>`.
+  The daemons then report `21.2.0 … umbrella (dev - RelWithDebInfo)` — that is
+  the real release; Siphon detects it as Umbrella.
+
 - **`vstart.sh`** from a Ceph source checkout of the target branch — fastest for
   a throwaway dev cluster on one machine, no root, easy to tear down. Good for
   capturing fixtures and quick manual passes; less representative of a real
@@ -207,12 +229,17 @@ per-PR. The per-PR guarantee is: `distros.yml` proves the build links, and the
 
 ## Adding a new supported release — checklist
 
-1. Add the release to `internal/version` (`version.Supported` + `byMajor`).
+1. Add the release to `internal/version` (a release var + its `byMajor` entry).
 2. Add the release to the `release-build` job's `ceph` matrix in `distros.yml`
    and confirm the upstream repo publishes `librados-devel` for it on the base
    image's `el` version.
-3. Capture golden fixtures into `internal/ceph/decode/testdata/<release>/` and
-   extend the decode table test; fix any schema drift the new fixtures reveal.
+3. Capture golden fixtures into `internal/ceph/decode/testdata/<release>/`
+   (`TestFixtures` picks the directory up automatically); fix any schema drift
+   the new fixtures reveal.
 4. Do one manual functional pass against a disposable cluster of that release,
    exercising at least one write operation per view.
-5. Update the README's **Ceph releases** table.
+5. Update the README's **Ceph releases** table and badge.
+6. Once verified, decide whether it becomes the default client release:
+   `Dockerfile` and `Makefile` (`CEPH_RELEASE`), `release.yml` (image
+   build-arg), `distros.yml` (`env.CEPH_RELEASE`), and the mock client's
+   version.

@@ -41,8 +41,8 @@ type Health struct {
 // ClusterVersion identifies the Ceph release the cluster is running.
 //
 // Release/Major are parsed from Raw. They drive the version-aware decoding
-// layer: Siphon targets a support matrix of Reef (18), Squid (19) and
-// Tentacle (20), and some admin-command JSON schemas differ between them.
+// layer: Siphon is tested against Squid (19), Tentacle (20) and Umbrella (21)
+// (Reef 18 best-effort), and some admin-command JSON schemas differ between them.
 type ClusterVersion struct {
 	Raw     string // full version string as reported by Ceph
 	Release string // named release, e.g. "tentacle"

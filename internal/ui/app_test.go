@@ -48,7 +48,7 @@ func TestDashboardRendersMockCluster(t *testing.T) {
 		"Dashboard",    // nav + panel title (the wordmark is now an ASCII logo)
 		"HEALTH_WARN",  // health badge/panel
 		"OSD_NEARFULL", // health check
-		"tentacle",     // version in header
+		"umbrella",     // version in header
 		"Capacity",     // capacity panel
 		"TiB",          // formatted capacity
 		"Client IO",    // io panel

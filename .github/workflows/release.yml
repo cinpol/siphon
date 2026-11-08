@@ -142,7 +142,7 @@ jobs:
           context: .
           platforms: ${{ matrix.platform }}
           build-args: |
-            CEPH_RELEASE=tentacle
+            CEPH_RELEASE=umbrella
             VERSION=${{ steps.ver.outputs.version }}
             COMMIT=${{ steps.ver.outputs.commit }}
             DATE=${{ steps.ver.outputs.date }}

@@ -2,9 +2,10 @@
 //
 // It exists so that release identification and capability decisions live in
 // one place instead of being scattered as magic numbers across the codebase.
-// Siphon targets three releases at go-live — Reef (18), Squid (19) and
-// Tentacle (20) — and the version-aware decoding layer (internal/ceph/decode)
-// uses this package to adapt when Ceph's JSON schemas differ between them.
+// Siphon is tested against Squid (19), Tentacle (20) and Umbrella (21); Reef
+// (18) is still recognised but no longer tested (see docs/testing.md for the
+// support tiers). The version-aware decoding layer (internal/ceph/decode) uses
+// this package to adapt when Ceph's JSON schemas differ between releases.
 package version
 
 import (
@@ -43,32 +44,28 @@ type Release struct {
 	Major int
 }
 
-// The releases Siphon targets. Tentacle is the current primary; all three
-// are supported at go-live.
+// The releases Siphon recognises, oldest to newest. Squid, Tentacle and
+// Umbrella are tested; Reef is kept so Detect still names it canonically
+// (best-effort, not tested).
 var (
 	Reef     = Release{Name: "reef", Major: 18}
 	Squid    = Release{Name: "squid", Major: 19}
 	Tentacle = Release{Name: "tentacle", Major: 20}
+	Umbrella = Release{Name: "umbrella", Major: 21}
 )
 
-// Supported is Siphon's support matrix, ordered oldest to newest.
-var Supported = []Release{Reef, Squid, Tentacle}
-
+// byMajor maps a major version to its canonical Release, for Detect.
 var byMajor = map[int]Release{
 	Reef.Major:     Reef,
 	Squid.Major:    Squid,
 	Tentacle.Major: Tentacle,
-}
-
-// FromMajor returns the named release for a major version, if known.
-func FromMajor(major int) (Release, bool) {
-	r, ok := byMajor[major]
-	return r, ok
+	Umbrella.Major: Umbrella,
 }
 
 // versionRe matches strings like:
 //
 //	ceph version 20.1.0 (abc123...) tentacle (stable)
+//	ceph version 21.2.0 (b060042...) umbrella (dev - RelWithDebInfo)
 //
 // capturing the major version and the release code name.
 var versionRe = regexp.MustCompile(`ceph version (\d+)\.\d+\.\d+[^)]*\)\s+(\w+)`)
@@ -90,10 +87,4 @@ func Detect(raw string) (Release, bool) {
 		return r, true
 	}
 	return Release{Name: m[2], Major: major}, true
-}
-
-// IsSupported reports whether the release is within Siphon's support matrix.
-func (r Release) IsSupported() bool {
-	_, ok := byMajor[r.Major]
-	return ok
 }

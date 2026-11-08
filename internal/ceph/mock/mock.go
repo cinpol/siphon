@@ -58,9 +58,9 @@ func New() *Client {
 		Orchestrator: model.OrchestratorCephadm,
 		fsid:         "b3e2f1a4-0000-1111-2222-333344445555",
 		version: model.ClusterVersion{
-			Raw:     "ceph version 20.1.0 (0000000000000000000000000000000000000000) tentacle (stable)",
-			Release: "tentacle",
-			Major:   20,
+			Raw:     "ceph version 21.2.0 (0000000000000000000000000000000000000000) umbrella (stable)",
+			Release: "umbrella",
+			Major:   21,
 		},
 		health: model.Health{
 			Status: model.HealthWarn,
@@ -137,21 +137,21 @@ func New() *Client {
 		},
 		daemons: map[string][]model.Daemon{
 			"mon": {
-				{Name: "mon.ceph-01", Type: "mon", Host: "ceph-01", Status: "running", Version: "20.1.0"},
-				{Name: "mon.ceph-02", Type: "mon", Host: "ceph-02", Status: "running", Version: "20.1.0"},
-				{Name: "mon.ceph-03", Type: "mon", Host: "ceph-03", Status: "running", Version: "20.1.0"},
+				{Name: "mon.ceph-01", Type: "mon", Host: "ceph-01", Status: "running", Version: "21.2.0"},
+				{Name: "mon.ceph-02", Type: "mon", Host: "ceph-02", Status: "running", Version: "21.2.0"},
+				{Name: "mon.ceph-03", Type: "mon", Host: "ceph-03", Status: "running", Version: "21.2.0"},
 			},
 			"mgr": {
-				{Name: "mgr.ceph-01.aab", Type: "mgr", Host: "ceph-01", Status: "running", Version: "20.1.0"},
-				{Name: "mgr.ceph-02.ccd", Type: "mgr", Host: "ceph-02", Status: "running", Version: "20.1.0"},
+				{Name: "mgr.ceph-01.aab", Type: "mgr", Host: "ceph-01", Status: "running", Version: "21.2.0"},
+				{Name: "mgr.ceph-02.ccd", Type: "mgr", Host: "ceph-02", Status: "running", Version: "21.2.0"},
 			},
 			"mds.cephfs": {
-				{Name: "mds.cephfs.ceph-01.xyz", Type: "mds", Host: "ceph-01", Status: "running", Version: "20.1.0"},
-				{Name: "mds.cephfs.ceph-02.uvw", Type: "mds", Host: "ceph-02", Status: "running", Version: "20.1.0"},
+				{Name: "mds.cephfs.ceph-01.xyz", Type: "mds", Host: "ceph-01", Status: "running", Version: "21.2.0"},
+				{Name: "mds.cephfs.ceph-02.uvw", Type: "mds", Host: "ceph-02", Status: "running", Version: "21.2.0"},
 			},
 			"rgw.default": {
-				{Name: "rgw.default.ceph-01.rst", Type: "rgw", Host: "ceph-01", Status: "running", Version: "20.1.0"},
-				{Name: "rgw.default.ceph-02.opq", Type: "rgw", Host: "ceph-02", Status: "stopped", Version: "20.1.0"},
+				{Name: "rgw.default.ceph-01.rst", Type: "rgw", Host: "ceph-01", Status: "running", Version: "21.2.0"},
+				{Name: "rgw.default.ceph-02.opq", Type: "rgw", Host: "ceph-02", Status: "stopped", Version: "21.2.0"},
 			},
 		},
 		// nodeDaemons mirrors `ceph node ls` for the non-cephadm inventory path.

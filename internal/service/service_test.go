@@ -17,8 +17,8 @@ func TestDashboardAggregates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Dashboard error: %v", err)
 	}
-	if d.Version.Release != "tentacle" {
-		t.Errorf("expected tentacle, got %q", d.Version.Release)
+	if d.Version.Release != "umbrella" {
+		t.Errorf("expected umbrella, got %q", d.Version.Release)
 	}
 	if d.Capacity.TotalBytes == 0 {
 		t.Error("expected capacity to be populated")
