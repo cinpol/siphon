@@ -471,14 +471,18 @@ func (m crushModel) startConfirm(op service.Operation) (crushModel, tea.Cmd) {
 	return m, nil
 }
 
-// validDestinations returns the buckets a node may legally move under: a bucket
-// of a higher CRUSH type that is neither the node itself nor one of its
-// descendants.
+// validDestinations returns the buckets a node may usefully move under: a
+// bucket of a higher CRUSH type that is neither the node itself, one of its
+// descendants, nor its current parent (moving there would change nothing).
 func (m crushModel) validDestinations(node model.CrushNode) []crushDest {
 	desc := m.descendants(node.ID)
+	parent, hasParent := m.parent[node.ID]
 	var dests []crushDest
 	for _, n := range m.nodes {
 		if n.IsOSD() || n.ID == node.ID || desc[n.ID] {
+			continue
+		}
+		if hasParent && n.ID == parent {
 			continue
 		}
 		if n.TypeID <= node.TypeID {
@@ -513,6 +517,11 @@ func (m crushModel) descendants(id int) map[int]bool {
 // --- tree construction (shared with 4a) -----------------------------------
 
 func (m *crushModel) build(nodes []model.CrushNode) {
+	// Remember the selected item, not just its row: a refresh can reorder the
+	// tree (e.g. after a device-class change), and the cursor must stay on the
+	// same node rather than land on whatever now occupies that row.
+	selected, hadSelection := m.currentRow()
+
 	m.nodes = make(map[int]model.CrushNode, len(nodes))
 	m.parent = make(map[int]int, len(nodes))
 	isChild := make(map[int]bool, len(nodes))
@@ -540,6 +549,16 @@ func (m *crushModel) build(nodes []model.CrushNode) {
 	}
 	m.computeWeights()
 	m.rebuild()
+	if hadSelection {
+		for i, r := range m.visible {
+			if r.id == selected.id {
+				m.cursor = i
+				break
+			}
+		}
+	}
+	// If the node is gone (or now hidden under a collapsed bucket), keep the row
+	// position, clamped to the tree.
 	if m.cursor >= len(m.visible) {
 		m.cursor = len(m.visible) - 1
 	}

@@ -617,9 +617,8 @@ func TestCrushMoveFlow(t *testing.T) {
 		t.Fatal("expected the move destination picker to open")
 	}
 
-	// Pick the second destination (rack2) and confirm.
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
-	m = updated.(Model)
+	// Pick the first destination (rack2; its current parent rack1 is not
+	// offered) and confirm.
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(Model)
 	if m.crush.mode != crushConfirm {
@@ -977,5 +976,48 @@ func TestCrushShowsMessageAndStaleBanner(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("expected %q in the CRUSH view:\n%s", want, out)
 		}
+	}
+}
+
+// TestCrushMoveExcludesCurrentParent verifies the move picker does not offer
+// the bucket the node already sits under (a no-op move).
+func TestCrushMoveExcludesCurrentParent(t *testing.T) {
+	cm := newCrushModel(service.New(mock.New()))
+	cm, _ = cm.Update(cm.fetchTree()())
+
+	host := cm.nodes[-5] // ceph-02, under rack1
+	var names []string
+	for _, d := range cm.validDestinations(host) {
+		names = append(names, d.Name)
+	}
+	if got := strings.Join(names, ","); got != "rack2,default" {
+		t.Errorf("destinations for ceph-02 = %q, want \"rack2,default\" (no rack1)", got)
+	}
+}
+
+// TestCrushCursorFollowsNodeAcrossRefresh verifies the selection stays on the
+// same node when a refresh reorders the tree, instead of staying on the row.
+func TestCrushCursorFollowsNodeAcrossRefresh(t *testing.T) {
+	mc := mock.New()
+	cm := newCrushModel(service.New(mc))
+	cm, _ = cm.Update(cm.fetchTree()())
+
+	// Select ceph-02 (row 5: default, rack1, ceph-01, osd.0, osd.1, ceph-02).
+	cm.cursor = 5
+	if n, _ := cm.selectedNode(); n.Name != "ceph-02" {
+		t.Fatalf("setup: expected ceph-02 at row 5, got %q", n.Name)
+	}
+
+	// Reorder: the refreshed tree lists rack1's hosts the other way round.
+	nodes, _ := mc.CrushTree(context.Background())
+	for i, n := range nodes {
+		if n.Name == "rack1" {
+			nodes[i].Children = []int{-5, -4}
+		}
+	}
+	cm, _ = cm.Update(crushMsg{nodes})
+
+	if n, _ := cm.selectedNode(); n.Name != "ceph-02" {
+		t.Errorf("after the reorder the cursor is on %q, want ceph-02", n.Name)
 	}
 }
