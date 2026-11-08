@@ -9,9 +9,9 @@ name: Distros
 #                      natural way of getting the Ceph client (apt for Debian/
 #                      Ubuntu; the upstream repo for RHEL family, which ships no
 #                      librados-devel)?
-#   - release-build  → does it build against each supported Ceph RELEASE
-#                      (reef/squid/tentacle), pinned via the upstream repo on a
-#                      single controlled base image?
+#   - release-build  → does it build against each tested Ceph RELEASE
+#                      (squid/tentacle/umbrella), pinned via the upstream repo
+#                      on a single controlled base image?
 #
 # Runs on:
 #   - pull requests   → catch breakage before it merges (main is PR-only,
@@ -30,10 +30,11 @@ permissions:
 
 # Default Ceph client release for the `build` job's RHEL-family images (RHEL/
 # Alma/Rocky don't package librados-devel, so it comes from the upstream repo).
-# The `release-build` job below overrides this per matrix cell to cover every
-# supported release — see docs/testing.md.
+# Pinned to the newest tested release, which publishes both el9 and el10. The
+# `release-build` job below overrides this per matrix cell to cover every
+# tested release — see docs/testing.md.
 env:
-  CEPH_RELEASE: squid
+  CEPH_RELEASE: umbrella
 
 jobs:
   build:
@@ -49,9 +50,7 @@ jobs:
           - { distro: "Debian 12", image: "debian:12", family: debian }
           - { distro: "Debian 13", image: "debian:13", family: debian }
           - { distro: "AlmaLinux 9", image: "almalinux:9", family: rhel, el: 9 }
-          # AlmaLinux 10 (el10) is omitted for now: upstream Ceph only publishes
-          # el10 packages for tentacle, not for the squid default this job pins.
-          # Re-add once reef/squid also ship el10.
+          - { distro: "AlmaLinux 10", image: "almalinux:10", family: rhel, el: 10 }
 
     steps:
       - name: Install dependencies (Debian family)
@@ -94,12 +93,12 @@ jobs:
       - name: Smoke test
         run: /tmp/siphon --version
 
-  # Does Siphon build & link against each Ceph release Siphon targets
-  # (internal/version.Supported)? Each cell pins one release from the upstream
-  # Ceph repo on a matching AlmaLinux base. el9 carries every supported release;
-  # el10 currently only exists for tentacle, so that's the sole el10 cell. This
-  # is the build/link half of release support; behavioural coverage is the
-  # decode fixtures (see docs/testing.md).
+  # Does Siphon build & link against each tested Ceph release (Squid, Tentacle,
+  # Umbrella — Reef is best-effort and not built here)? Each cell pins one
+  # release from the upstream Ceph repo on a matching AlmaLinux base. el9
+  # carries every tested release; el10 exists for tentacle and umbrella only
+  # (squid publishes no el10). This is the build/link half of release support;
+  # behavioural coverage is the decode fixtures (see docs/testing.md).
   release-build:
     name: Ceph ${{ matrix.ceph }} (el${{ matrix.el }})
     runs-on: ubuntu-latest
@@ -108,10 +107,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { ceph: reef, el: 9, image: "almalinux:9" }
           - { ceph: squid, el: 9, image: "almalinux:9" }
           - { ceph: tentacle, el: 9, image: "almalinux:9" }
           - { ceph: tentacle, el: 10, image: "almalinux:10" }
+          - { ceph: umbrella, el: 9, image: "almalinux:9" }
+          - { ceph: umbrella, el: 10, image: "almalinux:10" }
 
     steps:
       - name: Install dependencies

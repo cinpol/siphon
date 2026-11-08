@@ -14,7 +14,7 @@
 // This file requires librados at build time (the goceph tag) and a reachable
 // cluster at run time. Its JSON handling is covered by the decode package's
 // per-release golden fixtures (internal/ceph/decode/testdata), captured from
-// real Reef, Squid and Tentacle clusters.
+// real Reef, Squid, Tentacle and Umbrella clusters.
 package goceph
 
 import (

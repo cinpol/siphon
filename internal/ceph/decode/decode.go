@@ -2,7 +2,7 @@
 //
 // Ceph does not guarantee JSON schema stability across releases, so all
 // version-sensitive decoding lives here behind small, pure, testable functions.
-// When a schema diverges across Reef/Squid/Tentacle, add an adapter in this
+// When a schema diverges between releases, add an adapter in this
 // package rather than leaking version logic into the transport
 // (internal/ceph/goceph) or the UI. Keeping the functions pure (bytes in, model
 // out) means they can be unit-tested with recorded fixtures and no live cluster.

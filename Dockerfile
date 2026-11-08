@@ -5,10 +5,11 @@
 # Siphon talks to the cluster through librados (cgo), so both the build and the
 # runtime pull the Ceph client from download.ceph.com, pinned to a release via
 # the CEPH_RELEASE build-arg. librados is compatible across nearby releases, so
-# the default image works with Reef, Squid and Tentacle clusters; rebuild with
+# the default image works with clusters of the releases Siphon supports (tested:
+# Squid, Tentacle, Umbrella; Reef best-effort); rebuild with
 # `--build-arg CEPH_RELEASE=<release>` to match yours exactly.
 
-ARG CEPH_RELEASE=tentacle
+ARG CEPH_RELEASE=umbrella
 ARG GO_VERSION=1.26
 
 # ---- builder: compile the native (cgo + librados) binary ----

@@ -33,9 +33,9 @@ Notes:
 
 ## Which Ceph client is bundled
 
-The image ships the **Tentacle** client by default, which is compatible with
-Reef, Squid and Tentacle clusters. To match your release exactly, rebuild with a
-different `CEPH_RELEASE`:
+The image ships the **Umbrella** client by default, which works with Squid,
+Tentacle and Umbrella clusters (and, best-effort, Reef). To match your release
+exactly, rebuild with a different `CEPH_RELEASE`:
 
 ```sh
 make docker CEPH_RELEASE=squid

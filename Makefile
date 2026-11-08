@@ -13,7 +13,7 @@ VERSION_PKG := github.com/cinpol/siphon/internal/version
 # Container image settings. CEPH_RELEASE picks which Ceph client the image
 # bundles (see Dockerfile); override IMAGE/CEPH_RELEASE on the command line.
 IMAGE        ?= cinpol/siphon
-CEPH_RELEASE ?= tentacle
+CEPH_RELEASE ?= umbrella
 
 # Version metadata stamped into the binary. Override on the command line if
 # needed, e.g. `make build VERSION=1.2.3`.

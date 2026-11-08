@@ -6,7 +6,7 @@
   <a href="./LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License: Apache 2.0"></a>
   <img src="https://img.shields.io/badge/Go-1.26+-00ADD8.svg?logo=go&logoColor=white" alt="Go 1.26+">
   <img src="https://img.shields.io/badge/Platform-Linux-333333.svg?logo=linux&logoColor=white" alt="Platform: Linux">
-  <img src="https://img.shields.io/badge/Ceph-Reef_Squid_Tentacle-e6007a.svg" alt="Ceph: Reef, Squid, Tentacle">
+  <img src="https://img.shields.io/badge/Ceph-Squid_Tentacle_Umbrella-e6007a.svg" alt="Ceph: Squid, Tentacle, Umbrella">
 </p>
 
 <p align="center">
@@ -160,18 +160,23 @@ make build-mock
 
 ### Ceph releases
 
-Siphon targets the currently maintained Ceph releases:
+| Release | Major | Status |
+|---------|:-----:|--------|
+| Umbrella | 21 | ✅ Tested — the container image's default client |
+| Tentacle | 20 | ✅ Tested |
+| Squid | 19 | ✅ Tested |
+| Reef | 18 | ⚠️ Should work, not tested |
 
-| Release | Major |
-|---------|:-----:|
-| Reef | 18 |
-| Squid | 19 |
-| Tentacle | 20 |
+**Tested** means CI builds and links Siphon against that release's client
+libraries, and real admin-command output captured from that release is decoded
+in the test suite. **Reef** is best-effort: Siphon still recognises it and its
+older captured output still decodes, but it is no longer built in CI or
+re-tested. See [docs/testing.md](docs/testing.md) for details.
 
 ### Linux distributions
 
 Build-tested in CI against Ubuntu 22.04 / 24.04, Debian 12 / 13 and
-AlmaLinux 9 (which also covers binary-compatible RHEL / Rocky 9). Any
+AlmaLinux 9 / 10 (which also covers binary-compatible RHEL / Rocky 9 and 10). Any
 distribution shipping a supported Ceph client release should work; the
 constraint is the **Ceph client version**, not the distro itself.
 
