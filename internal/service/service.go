@@ -129,24 +129,15 @@ func (s *Service) PGs(ctx context.Context) ([]model.PG, error) {
 
 // --- Service (orchestrator) operation catalogue --------------------------
 
-// ServiceRestart restarts all daemons of a service.
+// ServiceRestart restarts all daemons of a service. The CLI spells it
+// `ceph orch restart <svc>`, but the mon command is prefix "orch" with the
+// verb in "action" (there is no "orch restart" prefix).
 func (s *Service) ServiceRestart(name string) Operation {
 	return Operation{
 		Title:       fmt.Sprintf("Restart service %s", name),
 		Command:     fmt.Sprintf("ceph orch restart %s", name),
 		Consequence: "Restarts every daemon in this service, one at a time. Brief availability impact.",
-		steps:       []map[string]any{{"prefix": "orch restart", "service_name": name}},
-		client:      s.client,
-	}
-}
-
-// ServiceRedeploy redeploys all daemons of a service.
-func (s *Service) ServiceRedeploy(name string) Operation {
-	return Operation{
-		Title:       fmt.Sprintf("Redeploy service %s", name),
-		Command:     fmt.Sprintf("ceph orch redeploy %s", name),
-		Consequence: "Recreates every daemon in this service (e.g. to apply a new image/config). Brief availability impact.",
-		steps:       []map[string]any{{"prefix": "orch redeploy", "service_name": name}},
+		steps:       []map[string]any{{"prefix": "orch", "action": "restart", "service_name": name}},
 		client:      s.client,
 	}
 }
@@ -261,7 +252,7 @@ func (s *Service) OSDReweight(id int, weight float64) Operation {
 		Title:       fmt.Sprintf("Reweight OSD.%d to %.2f", id, weight),
 		Command:     fmt.Sprintf("ceph osd reweight %d %.2f", id, weight),
 		Consequence: "Temporarily adjusts this OSD's weight, moving PGs. Reset by reweighting or marking in.",
-		steps:       []map[string]any{{"prefix": "osd reweight", "id": id, "weight": weight}},
+		steps:       []map[string]any{{"prefix": "osd reweight", "id": id, "weight": ceph.Float(weight)}},
 		client:      s.client,
 	}
 }
@@ -352,9 +343,36 @@ func (s *Service) FlagCatalogue() []FlagInfo {
 	return append([]FlagInfo(nil), flagCatalogue...)
 }
 
-// Flags returns the currently-set cluster flags.
+// Flags returns the currently-set cluster flags, as named in the flag
+// catalogue. Ceph has no stored "pause" flag: `ceph osd set pause` sets
+// pauserd and pausewr, and the OSD map reports those two. So "pause" is added
+// when both are set, letting the catalogue entry show (and unset) it.
 func (s *Service) Flags(ctx context.Context) ([]string, error) {
-	return s.client.Flags(ctx)
+	flags, err := s.client.Flags(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return withPauseAlias(flags), nil
+}
+
+// withPauseAlias appends "pause" when both pauserd and pausewr are set (and
+// "pause" is not already listed). The real flags are kept as they are.
+func withPauseAlias(flags []string) []string {
+	var rd, wr bool
+	for _, f := range flags {
+		switch f {
+		case "pause":
+			return flags
+		case "pauserd":
+			rd = true
+		case "pausewr":
+			wr = true
+		}
+	}
+	if rd && wr {
+		return append(flags, "pause")
+	}
+	return flags
 }
 
 func flagRisk(name string) string {
@@ -409,7 +427,7 @@ func (s *Service) CrushReweight(name string, weight float64) Operation {
 		Title:       fmt.Sprintf("Reweight %s to %.4f", name, weight),
 		Command:     fmt.Sprintf("ceph osd crush reweight %s %.4f", name, weight),
 		Consequence: "Changes the CRUSH weight, moving data proportionally.",
-		steps:       []map[string]any{{"prefix": "osd crush reweight", "name": name, "weight": weight}},
+		steps:       []map[string]any{{"prefix": "osd crush reweight", "name": name, "weight": ceph.Float(weight)}},
 		client:      s.client,
 	}
 }

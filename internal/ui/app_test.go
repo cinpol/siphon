@@ -407,8 +407,8 @@ func TestServiceDrillAndRestart(t *testing.T) {
 		t.Fatal("expected an execution command after y")
 	}
 	m.Update(runCmd())
-	if got := mc.LastCommand["prefix"]; got != "orch restart" {
-		t.Errorf("expected 'orch restart' dispatched, got %v", got)
+	if got := mc.LastCommand["prefix"]; got != "orch" || mc.LastCommand["action"] != "restart" {
+		t.Errorf("expected prefix 'orch' + action 'restart' dispatched, got %v", mc.LastCommand)
 	}
 }
 
