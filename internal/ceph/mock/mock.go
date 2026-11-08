@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/cinpol/siphon/internal/ceph"
 	"github.com/cinpol/siphon/internal/model"
 )
 
@@ -310,7 +311,7 @@ func (c *Client) Admin(ctx context.Context, command map[string]any) error {
 		c.eachTargetOSD(command, func(o *model.OSD) { o.In = true; o.Reweight = 1 })
 	case "osd reweight":
 		if id, ok := toInt(command["id"]); ok {
-			if w, ok := command["weight"].(float64); ok {
+			if w, ok := toFloat(command["weight"]); ok {
 				c.mutateOSD(id, func(o *model.OSD) { o.Reweight = w; o.In = w > 0 })
 			}
 		}
@@ -345,8 +346,10 @@ func (c *Client) Admin(ctx context.Context, command map[string]any) error {
 		c.setFlag(str(command["key"]))
 	case "osd unset":
 		c.unsetFlag(str(command["key"]))
-	case "orch restart", "orch redeploy":
-		c.serviceAllRunning(str(command["service_name"]))
+	case "orch":
+		if str(command["action"]) == "restart" {
+			c.serviceAllRunning(str(command["service_name"]))
+		}
 	case "orch daemon":
 		c.daemonAction(str(command["action"]), str(command["name"]))
 	}
@@ -354,7 +357,7 @@ func (c *Client) Admin(ctx context.Context, command map[string]any) error {
 }
 
 // serviceAllRunning marks every daemon of a service running (models a completed
-// restart/redeploy for the mock).
+// service restart for the mock).
 func (c *Client) serviceAllRunning(name string) {
 	list := c.daemons[name]
 	for i := range list {
@@ -399,6 +402,11 @@ func (c *Client) setFlag(name string) {
 	if name == "" {
 		return
 	}
+	if name == "pause" { // like Ceph: pause is stored as pauserd + pausewr
+		c.setFlag("pauserd")
+		c.setFlag("pausewr")
+		return
+	}
 	for _, f := range c.flags {
 		if f == name {
 			return
@@ -408,6 +416,11 @@ func (c *Client) setFlag(name string) {
 }
 
 func (c *Client) unsetFlag(name string) {
+	if name == "pause" {
+		c.unsetFlag("pauserd")
+		c.unsetFlag("pausewr")
+		return
+	}
 	kept := c.flags[:0]
 	for _, f := range c.flags {
 		if f != name {
@@ -588,7 +601,7 @@ func (c *Client) crushMove(command map[string]any) {
 
 func (c *Client) crushReweight(command map[string]any) {
 	if node := c.crushNodeByName(str(command["name"])); node != nil {
-		if w, ok := command["weight"].(float64); ok {
+		if w, ok := toFloat(command["weight"]); ok {
 			node.CrushWeight = w
 		}
 	}
@@ -655,6 +668,18 @@ func (c *Client) removeTombstoned() {
 		}
 	}
 	c.osds = kept
+}
+
+// toFloat reads a float command argument: ceph.Float as the service layer
+// sends it, or a plain float64.
+func toFloat(v any) (float64, bool) {
+	switch n := v.(type) {
+	case ceph.Float:
+		return float64(n), true
+	case float64:
+		return n, true
+	}
+	return 0, false
 }
 
 // toInt coerces the loosely-typed command values (int or numeric string) used

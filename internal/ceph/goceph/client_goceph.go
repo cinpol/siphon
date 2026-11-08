@@ -64,15 +64,16 @@ func New(cfg Config) (ceph.Client, error) {
 }
 
 // monCommand marshals cmd to JSON, sends it as a mon command, and returns the
-// raw JSON response for the decode package to parse.
+// raw JSON response for the decode package to parse. On failure the error
+// carries Ceph's status text (see monError).
 func (c *Client) monCommand(cmd map[string]any) ([]byte, error) {
 	buf, err := json.Marshal(cmd)
 	if err != nil {
 		return nil, err
 	}
-	out, _, err := c.conn.MonCommand(buf)
+	out, status, err := c.conn.MonCommand(buf)
 	if err != nil {
-		return nil, fmt.Errorf("mon command %v: %w", cmd["prefix"], err)
+		return nil, monError(cmd["prefix"], status, err)
 	}
 	return out, nil
 }

@@ -2,10 +2,13 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/cinpol/siphon/internal/ceph"
 	"github.com/cinpol/siphon/internal/ceph/mock"
 	"github.com/cinpol/siphon/internal/model"
 )
@@ -258,8 +261,7 @@ func TestServiceOperationCatalogue(t *testing.T) {
 		wantCmd    string
 		wantPrefix string
 	}{
-		{"svc-restart", func(s *Service) Operation { return s.ServiceRestart("mon") }, "ceph orch restart mon", "orch restart"},
-		{"svc-redeploy", func(s *Service) Operation { return s.ServiceRedeploy("mgr") }, "ceph orch redeploy mgr", "orch redeploy"},
+		{"svc-restart", func(s *Service) Operation { return s.ServiceRestart("mon") }, "ceph orch restart mon", "orch"},
 		{"daemon-restart", func(s *Service) Operation { return s.DaemonRestart("mon.ceph-01") }, "ceph orch daemon restart mon.ceph-01", "orch daemon"},
 		{"daemon-start", func(s *Service) Operation { return s.DaemonStart("mon.ceph-01") }, "ceph orch daemon start mon.ceph-01", "orch daemon"},
 		{"daemon-stop", func(s *Service) Operation { return s.DaemonStop("mon.ceph-01") }, "ceph orch daemon stop mon.ceph-01", "orch daemon"},
@@ -276,6 +278,50 @@ func TestServiceOperationCatalogue(t *testing.T) {
 			}
 			if got := mc.LastCommand["prefix"]; got != tc.wantPrefix {
 				t.Errorf("prefix = %v, want %q", got, tc.wantPrefix)
+			}
+		})
+	}
+}
+
+// TestServiceRestartMonCommand pins the real mon-command shape: Ceph has no
+// "orch restart" prefix; the CLI's `ceph orch restart <svc>` is prefix "orch"
+// with action "restart".
+func TestServiceRestartMonCommand(t *testing.T) {
+	mc := mock.New()
+	if err := New(mc).ServiceRestart("rgw.lab").Run(context.Background()); err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+	got, _ := json.Marshal(mc.LastCommand)
+	want := `{"action":"restart","prefix":"orch","service_name":"rgw.lab"}`
+	if string(got) != want {
+		t.Errorf("mon command = %s, want %s", got, want)
+	}
+}
+
+// TestReweightSendsDecimalWeight guards against Ceph's EINVAL on integral
+// floats: a weight of 1 must go out as 1.0.
+func TestReweightSendsDecimalWeight(t *testing.T) {
+	cases := []struct {
+		name string
+		op   func(*Service) Operation
+		want string
+	}{
+		{"osd reweight 1", func(s *Service) Operation { return s.OSDReweight(0, 1) }, `"weight":1.0`},
+		{"osd reweight 0.8", func(s *Service) Operation { return s.OSDReweight(0, 0.8) }, `"weight":0.8`},
+		{"crush reweight 2", func(s *Service) Operation { return s.CrushReweight("osd.0", 2) }, `"weight":2.0`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mc := mock.New()
+			if err := tc.op(New(mc)).Run(context.Background()); err != nil {
+				t.Fatalf("Run error: %v", err)
+			}
+			if _, ok := mc.LastCommand["weight"].(ceph.Float); !ok {
+				t.Errorf("weight is %T, want ceph.Float", mc.LastCommand["weight"])
+			}
+			got, _ := json.Marshal(mc.LastCommand)
+			if !strings.Contains(string(got), tc.want) {
+				t.Errorf("mon command = %s, want it to contain %s", got, tc.want)
 			}
 		})
 	}
@@ -320,6 +366,63 @@ func TestFlagOperations(t *testing.T) {
 	unset := svc.FlagUnset("pause")
 	if unset.Command != "ceph osd unset pause" {
 		t.Errorf("unexpected unset command: %q", unset.Command)
+	}
+}
+
+// TestFlagsPauseAlias covers the round trip that was broken: Ceph stores
+// `pause` as pauserd + pausewr, so the catalogue's "pause" must read as set
+// when both are, and unsetting it must clear both.
+func TestFlagsPauseAlias(t *testing.T) {
+	ctx := context.Background()
+	mc := mock.New()
+	svc := New(mc)
+
+	if err := svc.FlagSet("pause").Run(ctx); err != nil {
+		t.Fatalf("set pause: %v", err)
+	}
+	raw, _ := mc.Flags(ctx)
+	if slices.Contains(raw, "pause") || !slices.Contains(raw, "pauserd") || !slices.Contains(raw, "pausewr") {
+		t.Fatalf("mock should store pause as pauserd+pausewr, got %v", raw)
+	}
+	flags, err := svc.Flags(ctx)
+	if err != nil {
+		t.Fatalf("Flags: %v", err)
+	}
+	if !slices.Contains(flags, "pause") {
+		t.Errorf("expected pause reported as set, got %v", flags)
+	}
+
+	if err := svc.FlagUnset("pause").Run(ctx); err != nil {
+		t.Fatalf("unset pause: %v", err)
+	}
+	flags, _ = svc.Flags(ctx)
+	for _, f := range []string{"pause", "pauserd", "pausewr"} {
+		if slices.Contains(flags, f) {
+			t.Errorf("%s still set after unset pause: %v", f, flags)
+		}
+	}
+}
+
+func TestWithPauseAlias(t *testing.T) {
+	cases := []struct {
+		in   []string
+		want bool
+	}{
+		{[]string{"pauserd", "pausewr"}, true},
+		{[]string{"noout", "pausewr", "pauserd"}, true},
+		{[]string{"pauserd"}, false},
+		{[]string{"pausewr"}, false},
+		{nil, false},
+	}
+	for _, c := range cases {
+		got := withPauseAlias(c.in)
+		if slices.Contains(got, "pause") != c.want {
+			t.Errorf("withPauseAlias(%v) = %v, want pause=%v", c.in, got, c.want)
+		}
+	}
+	// Already listed: not duplicated.
+	if got := withPauseAlias([]string{"pause", "pauserd", "pausewr"}); len(got) != 3 {
+		t.Errorf("pause duplicated: %v", got)
 	}
 }
 
