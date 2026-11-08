@@ -25,7 +25,7 @@ import (
 var (
 	// Version is Siphon's own version. The "-dev" suffix marks an
 	// un-stamped build; release tooling overwrites it with the tag.
-	Version = "0.7.1-dev"
+	Version = "0.7.2-dev"
 	// Commit is the git revision the binary was built from.
 	Commit = "none"
 	// Date is the build timestamp (RFC 3339, UTC).
