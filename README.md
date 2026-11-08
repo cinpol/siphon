@@ -81,11 +81,11 @@ sudo apt-get install -y librados2 librbd1
 sudo dnf install -y librados2 librbd1
 ```
 
-Then download, verify and install the binary (replace `v0.7.1` with the latest
+Then download, verify and install the binary (replace `v0.7.2` with the latest
 release; `ARCH` picks amd64 or arm64):
 
 ```sh
-VERSION=v0.7.1
+VERSION=v0.7.2
 ARCH=amd64            # or arm64
 BASE="https://github.com/cinpol/siphon/releases/download/$VERSION"
 
