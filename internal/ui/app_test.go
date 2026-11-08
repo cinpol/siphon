@@ -344,24 +344,111 @@ func TestPGProblemsToggleAndFilter(t *testing.T) {
 	}
 }
 
-// TestOpErrorClearsOnRefresh verifies a failed-operation banner is transient: it
-// shows after the failure and clears on the next successful data load (so it no
-// longer persists until the app is restarted).
-func TestOpErrorClearsOnRefresh(t *testing.T) {
+// TestMessageSurvivesRefresh verifies a failed-operation message is not wiped by
+// the periodic refresh (it used to vanish within one refresh interval).
+func TestMessageSurvivesRefresh(t *testing.T) {
 	pm := newPoolModel(service.New(mock.New()))
 	pm, _ = pm.Update(pm.fetch()()) // load pools
 
 	pm, _ = pm.Update(opResultMsg{err: errors.New("mon command osd pool delete: not permitted")})
-	if pm.opErr == nil {
-		t.Fatal("expected opErr to be set after a failed operation")
+	if !pm.msg.failed() {
+		t.Fatal("expected the error message to be set after a failed operation")
 	}
 	if !strings.Contains(pm.View(90, 20), "operation failed") {
 		t.Errorf("expected the error banner to render:\n%s", pm.View(90, 20))
 	}
 
 	pm, _ = pm.Update(pm.fetch()()) // a refresh
-	if pm.opErr != nil {
-		t.Errorf("expected opErr to clear on refresh, got %v", pm.opErr)
+	if !pm.msg.failed() {
+		t.Error("expected the message to survive a refresh")
+	}
+
+	pm, _ = pm.Update(opResultMsg{}) // the next operation succeeds
+	if pm.msg.banner() != "" {
+		t.Error("expected a successful operation to clear the message")
+	}
+}
+
+// TestMessagesBehaveTheSameInEveryView runs the same message lifecycle against
+// all six resource views: an error and a notice both survive a refresh and are
+// dismissed by the next keypress.
+func TestMessagesBehaveTheSameInEveryView(t *testing.T) {
+	views := []struct {
+		key   string
+		msg   func(*Model) *viewMessage
+		fetch func(*Model) tea.Cmd
+	}{
+		{"2", func(m *Model) *viewMessage { return &m.osd.msg }, func(m *Model) tea.Cmd { return m.osd.fetch() }},
+		{"3", func(m *Model) *viewMessage { return &m.pool.msg }, func(m *Model) tea.Cmd { return m.pool.fetch() }},
+		{"4", func(m *Model) *viewMessage { return &m.crush.msg }, func(m *Model) tea.Cmd { return m.crush.fetchTree() }}, // fetch() is a batch
+		{"5", func(m *Model) *viewMessage { return &m.flags.msg }, func(m *Model) tea.Cmd { return m.flags.fetch() }},
+		{"6", func(m *Model) *viewMessage { return &m.services.msg }, func(m *Model) tea.Cmd { return m.services.fetch() }},
+		{"7", func(m *Model) *viewMessage { return &m.pgs.msg }, func(m *Model) tea.Cmd { return m.pgs.fetch() }},
+	}
+	refresh := func(m Model, fetch func(*Model) tea.Cmd) Model {
+		updated, _ := m.Update(fetch(&m)())
+		return updated.(Model)
+	}
+	for _, v := range views {
+		for _, kind := range []string{"error", "notice"} {
+			t.Run(v.key+"/"+kind, func(t *testing.T) {
+				m := newTestModel(t)
+				updated, _ := m.Update(runes(v.key))
+				m = updated.(Model)
+				m = refresh(m, v.fetch) // initial load
+
+				if kind == "error" {
+					updated, _ = m.Update(opResultMsg{err: errors.New("boom")})
+					m = updated.(Model)
+				} else {
+					v.msg(&m).setNotice("heads up")
+				}
+				if v.msg(&m).banner() == "" {
+					t.Fatal("expected a message to be shown")
+				}
+
+				m = refresh(m, v.fetch) // fresh data keeps it
+				if v.msg(&m).banner() == "" {
+					t.Fatal("expected the message to survive a refresh")
+				}
+
+				updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+				m = updated.(Model)
+				if v.msg(&m).banner() != "" {
+					t.Error("expected a keypress to dismiss the message")
+				}
+			})
+		}
+	}
+}
+
+// TestMessageStaysWhileFormOpen verifies keys typed into an open form do not
+// dismiss a refusal, so it stays readable while the operator fixes the input.
+func TestMessageStaysWhileFormOpen(t *testing.T) {
+	m := newTestModel(t)
+	updated, _ := m.Update(runes("3")) // Pools
+	m = updated.(Model)
+	updated, _ = m.Update(m.pool.fetch()())
+	m = updated.(Model)
+	updated, _ = m.Update(runes("e")) // open the edit form
+	m = updated.(Model)
+	if !m.pool.capturing() {
+		t.Fatal("expected the edit form to be open")
+	}
+
+	m.pool.msg.setNotice("pool already has an application")
+	updated, _ = m.Update(runes("x")) // typed into the form
+	m = updated.(Model)
+	if m.pool.msg.banner() == "" {
+		t.Fatal("a key typed into the form must not dismiss the message")
+	}
+
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc}) // close the form
+	m = updated.(Model)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown}) // next key in the table
+	m = updated.(Model)
+	if m.pool.msg.banner() != "" {
+		t.Error("expected the next key after the form closed to dismiss the message")
 	}
 }
 
@@ -873,5 +960,22 @@ func TestQuitKeys(t *testing.T) {
 	}
 	if _, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC}); cmd == nil {
 		t.Error("ctrl+c did not produce a command (expected Quit)")
+	}
+}
+
+// TestCrushShowsMessageAndStaleBanner verifies CRUSH renders like every other
+// view: the message line and the refresh-failed banner together, with the tree
+// still visible below (CRUSH scrolls by hand, so its row maths must allow both).
+func TestCrushShowsMessageAndStaleBanner(t *testing.T) {
+	cm := newCrushModel(service.New(mock.New()))
+	cm, _ = cm.Update(cm.fetchTree()()) // fetch() is a batch; load the tree itself
+	cm.msg.setError(errors.New("boom"))
+	cm.err = errors.New("timeout")
+
+	out := cm.View(120, 30)
+	for _, want := range []string{"operation failed: boom", "refresh failed", "default"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("expected %q in the CRUSH view:\n%s", want, out)
+		}
 	}
 }

@@ -76,8 +76,7 @@ type poolModel struct {
 	sort      tableSort[model.Pool]
 	pendingOp service.Operation
 	editing   model.Pool
-	opErr     error
-	notice    string
+	msg       viewMessage
 
 	width  int
 	height int
@@ -177,7 +176,6 @@ func (m poolModel) Update(msg tea.Msg) (poolModel, tea.Cmd) {
 	case poolsMsg:
 		m.pools = msg.pools
 		m.err = nil
-		m.opErr = nil // a fresh, successful load clears any stale op error
 		m.loading = false
 		m.refreshRows()
 		return m, nil
@@ -187,10 +185,10 @@ func (m poolModel) Update(msg tea.Msg) (poolModel, tea.Cmd) {
 		return m, nil
 	case opResultMsg:
 		if msg.err != nil {
-			m.opErr = msg.err
+			m.msg.setError(msg.err)
 			return m, nil
 		}
-		m.opErr = nil
+		m.msg.clear()
 		m.loading = true
 		return m, m.fetch()
 	case tea.KeyMsg:
@@ -264,7 +262,7 @@ func (m poolModel) dispatch(msg tea.KeyMsg) (poolModel, tea.Cmd) {
 		m.formKind = poolFormCreate
 		m.form = newCreatePoolForm()
 		m.mode = poolForm
-		m.notice = ""
+		m.msg.clear()
 		return m, textinput.Blink
 	case key.Matches(msg, m.keys.Edit):
 		if p, ok := m.selectedPool(); ok {
@@ -272,7 +270,7 @@ func (m poolModel) dispatch(msg tea.KeyMsg) (poolModel, tea.Cmd) {
 			m.editing = p
 			m.form = newEditPoolForm(p)
 			m.mode = poolForm
-			m.notice = ""
+			m.msg.clear()
 			return m, textinput.Blink
 		}
 	case key.Matches(msg, m.keys.Delete):
@@ -304,7 +302,7 @@ func (m poolModel) submitForm() (poolModel, tea.Cmd) {
 		name := m.form.Value(0)
 		if name == "" {
 			m.form = m.form.Reactivate()
-			m.notice = "pool name is required"
+			m.msg.setNotice("pool name is required")
 			return m, nil
 		}
 		spec := service.PoolCreateSpec{
@@ -327,10 +325,15 @@ func (m poolModel) submitForm() (poolModel, tea.Cmd) {
 		CrushRule:   m.form.Value(4),
 		Application: m.form.Value(5),
 	}
+	if err := m.svc.CheckPoolEdit(m.editing, spec); err != nil {
+		m.form = m.form.Reactivate()
+		m.msg.setNotice(err.Error())
+		return m, nil
+	}
 	op := m.svc.PoolEdit(m.editing, spec)
 	if op.Empty() {
 		m.mode = poolNormal
-		m.notice = "no changes to apply"
+		m.msg.setNotice("no changes to apply")
 		return m, nil
 	}
 	return m.startConfirm(op)
@@ -354,7 +357,7 @@ func (m poolModel) startConfirm(op service.Operation) (poolModel, tea.Cmd) {
 	m.pendingOp = op
 	m.confirm = components.NewYesNo(op.Title, op.Command, op.Consequence, op.Irreversible)
 	m.mode = poolConfirm
-	m.notice = ""
+	m.msg.clear()
 	return m, nil
 }
 
@@ -375,20 +378,12 @@ func (m poolModel) View(width, height int) string {
 }
 
 func (m poolModel) pageView(width int) string {
-	prefix := ""
-	switch {
-	case m.opErr != nil:
-		prefix = styles.Danger.Render("operation failed: "+m.opErr.Error()) + "\n\n"
-	case m.notice != "":
-		prefix = styles.Faint.Render(m.notice) + "\n\n"
-	}
+	prefix := m.msg.banner()
 
 	if m.err != nil && m.pools == nil {
 		return prefix + errorScreen(m.err)
 	}
-	if m.err != nil {
-		prefix += staleBanner(m.err) + "\n\n"
-	}
+	prefix += staleLine(m.err)
 
 	switch {
 	case m.loading && m.pools == nil:

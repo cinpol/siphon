@@ -64,7 +64,7 @@ type pgModel struct {
 	confirming bool
 	confirm    components.Confirm
 	pendingOp  service.Operation
-	opErr      error
+	msg        viewMessage
 
 	err     error
 	loading bool
@@ -156,7 +156,6 @@ func (m pgModel) Update(msg tea.Msg) (pgModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case pgsMsg:
 		m.err = nil
-		m.opErr = nil // a fresh, successful load clears any stale op error
 		m.loading = false
 		m.pgs = msg.pgs
 		m.rebuild()
@@ -167,10 +166,10 @@ func (m pgModel) Update(msg tea.Msg) (pgModel, tea.Cmd) {
 		return m, nil
 	case opResultMsg:
 		if msg.err != nil {
-			m.opErr = msg.err
+			m.msg.setError(msg.err)
 			return m, nil
 		}
-		m.opErr = nil
+		m.msg.clear()
 		m.loading = true
 		return m, m.fetch()
 	case tea.KeyMsg:
@@ -314,16 +313,11 @@ func (m pgModel) View(width, height int) string {
 }
 
 func (m pgModel) pageView(width int) string {
-	prefix := ""
-	if m.opErr != nil {
-		prefix = styles.Danger.Render("operation failed: "+m.opErr.Error()) + "\n\n"
-	}
+	prefix := m.msg.banner()
 	if m.err != nil && len(m.pgs) == 0 {
 		return prefix + errorScreen(m.err)
 	}
-	if m.err != nil {
-		prefix += staleBanner(m.err) + "\n\n"
-	}
+	prefix += staleLine(m.err)
 	switch {
 	case m.loading && m.pgs == nil:
 		return prefix + styles.Faint.Render("Loading PGs…")

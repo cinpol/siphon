@@ -445,3 +445,58 @@ func findPool(t *testing.T, pools []model.Pool, name string) model.Pool {
 	t.Fatalf("pool %q not found", name)
 	return model.Pool{}
 }
+
+func TestCheckPoolEdit(t *testing.T) {
+	svc := New(mock.New())
+	withApp := model.Pool{Name: "data", Applications: []string{"rbd"}}
+	noApp := model.Pool{Name: "fresh"}
+	cases := []struct {
+		name    string
+		pool    model.Pool
+		app     string
+		wantErr bool
+	}{
+		{"second application refused", withApp, "cephfs", true},
+		{"same application is fine", withApp, "rbd", false},
+		{"first application is fine", noApp, "rbd", false},
+		{"no application change", withApp, "", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			err := svc.CheckPoolEdit(c.pool, PoolEditSpec{Application: c.app})
+			if (err != nil) != c.wantErr {
+				t.Fatalf("CheckPoolEdit err = %v, wantErr %v", err, c.wantErr)
+			}
+			if err != nil && !strings.Contains(err.Error(), `already has application "rbd"`) {
+				t.Errorf("unexpected message: %v", err)
+			}
+		})
+	}
+}
+
+func TestPartialError(t *testing.T) {
+	boom := errors.New("boom")
+	three := Operation{Command: "ceph a\nceph b\nceph c", steps: make([]map[string]any, 3)}
+
+	if got := three.partialError(0, boom); got != boom {
+		t.Errorf("first-step failure should be returned as is, got %v", got)
+	}
+
+	got := three.partialError(2, boom)
+	want := "step 3 of 3: boom — already applied: ceph a; ceph b"
+	if got.Error() != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+	if !errors.Is(got, boom) {
+		t.Error("the step's error is no longer wrapped")
+	}
+
+	// Without one command line per step, fall back to a count.
+	odd := Operation{Command: "ceph x", steps: make([]map[string]any, 3)}
+	if got := odd.partialError(1, boom).Error(); got != "step 2 of 3: boom — already applied: the first step" {
+		t.Errorf("fallback (1): %q", got)
+	}
+	if got := odd.partialError(2, boom).Error(); got != "step 3 of 3: boom — already applied: the first 2 steps" {
+		t.Errorf("fallback (2): %q", got)
+	}
+}

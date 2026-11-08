@@ -203,17 +203,36 @@ func (o Operation) Empty() bool { return len(o.steps) == 0 }
 // Run executes each step in order, stopping at the first error. A permission
 // (EPERM) failure is translated to PermissionHint when one is set, so the UI can
 // tell the operator how to unblock the operation rather than showing a raw
-// rados/errno message.
+// rados/errno message. If earlier steps already succeeded, the error says which,
+// so the operator knows the cluster's actual state (there is no rollback: many
+// steps, such as pg_num changes, have no clean inverse).
 func (o Operation) Run(ctx context.Context) error {
-	for _, step := range o.steps {
+	for i, step := range o.steps {
 		if err := o.client.Admin(ctx, step); err != nil {
 			if o.PermissionHint != "" && isPermissionError(err) {
-				return errors.New(o.PermissionHint)
+				err = errors.New(o.PermissionHint)
 			}
-			return err
+			return o.partialError(i, err)
 		}
 	}
 	return nil
+}
+
+// partialError adds "what was already applied" to the error of step failed
+// (0-based) of a multi-step operation; a first-step failure is returned as is.
+func (o Operation) partialError(failed int, err error) error {
+	if failed == 0 {
+		return err
+	}
+	applied := fmt.Sprintf("the first %d steps", failed)
+	if failed == 1 {
+		applied = "the first step"
+	}
+	// Command has one line per step for operations built with addStep.
+	if lines := strings.Split(o.Command, "\n"); len(lines) == len(o.steps) {
+		applied = strings.Join(lines[:failed], "; ")
+	}
+	return fmt.Errorf("step %d of %d: %w — already applied: %s", failed+1, len(o.steps), err, applied)
 }
 
 // isPermissionError reports whether err is Ceph's EPERM ("operation not
@@ -555,8 +574,25 @@ func (s *Service) PoolCreate(spec PoolCreateSpec) Operation {
 	return op
 }
 
+// CheckPoolEdit reports why an edit cannot be applied, or nil. Callers check
+// it before PoolEdit so the operator gets the reason up front, not a failed
+// step halfway through.
+//
+// A pool serves one application: Ceph refuses to enable a second one without
+// --yes-i-really-mean-it, because mixing applications on a pool is almost
+// always a mistake. Siphon does not offer that override.
+func (s *Service) CheckPoolEdit(current model.Pool, spec PoolEditSpec) error {
+	if spec.Application != "" && len(current.Applications) > 0 &&
+		!containsString(current.Applications, spec.Application) {
+		return fmt.Errorf("pool %q already has application %q; a pool serves one application, so Siphon won't add %q",
+			current.Name, strings.Join(current.Applications, ","), spec.Application)
+	}
+	return nil
+}
+
 // PoolEdit builds an operation containing only the changes between the current
 // pool and the desired spec. If nothing changed, the operation is Empty().
+// Check the spec with CheckPoolEdit first.
 func (s *Service) PoolEdit(current model.Pool, spec PoolEditSpec) Operation {
 	op := Operation{
 		Title:       fmt.Sprintf("Edit pool %q", current.Name),

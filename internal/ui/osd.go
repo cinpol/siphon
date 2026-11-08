@@ -76,7 +76,7 @@ type osdModel struct {
 	filter    tableFilter
 	sort      tableSort[model.OSD]
 	pendingOp service.Operation
-	opErr     error
+	msg       viewMessage
 
 	width  int
 	height int
@@ -205,7 +205,6 @@ func (m osdModel) Update(msg tea.Msg) (osdModel, tea.Cmd) {
 	case osdsMsg:
 		m.osds = msg.osds
 		m.err = nil
-		m.opErr = nil // a fresh, successful load clears any stale op error
 		m.loading = false
 		m.refreshRows()
 		return m, nil
@@ -215,10 +214,10 @@ func (m osdModel) Update(msg tea.Msg) (osdModel, tea.Cmd) {
 		return m, nil
 	case opResultMsg:
 		if msg.err != nil {
-			m.opErr = msg.err
+			m.msg.setError(msg.err)
 			return m, nil
 		}
-		m.opErr = nil
+		m.msg.clear()
 		m.loading = true
 		return m, m.fetch() // reflect the change immediately
 	case tea.KeyMsg:
@@ -386,16 +385,11 @@ func (m osdModel) View(width, height int) string {
 
 // pageView renders the OSD list (the background behind any popup).
 func (m osdModel) pageView(width int) string {
-	var prefix string
-	if m.opErr != nil {
-		prefix = styles.Danger.Render("operation failed: "+m.opErr.Error()) + "\n\n"
-	}
+	prefix := m.msg.banner()
 	if m.err != nil && m.osds == nil {
 		return prefix + errorScreen(m.err)
 	}
-	if m.err != nil {
-		prefix += staleBanner(m.err) + "\n\n"
-	}
+	prefix += staleLine(m.err)
 	switch {
 	case m.loading && m.osds == nil:
 		return prefix + styles.Faint.Render("Loading OSDs…")

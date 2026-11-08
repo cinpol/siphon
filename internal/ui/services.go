@@ -75,7 +75,7 @@ type serviceModel struct {
 	confirm    components.Confirm
 	filter     tableFilter
 	pendingOp  service.Operation
-	opErr      error
+	msg        viewMessage
 
 	width  int
 	height int
@@ -236,21 +236,18 @@ func (m serviceModel) Update(msg tea.Msg) (serviceModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case servicesMsg:
 		m.err = nil
-		m.opErr = nil // a fresh, successful load clears any stale op error
 		m.loading = false
 		m.services = msg.services
 		m.svcTable.SetRows(m.filter.apply(serviceRows(m.services)))
 		return m, nil
 	case daemonsMsg:
 		m.err = nil
-		m.opErr = nil
 		m.loading = false
 		m.daemons = msg.daemons
 		m.dmnTable.SetRows(m.filter.apply(daemonRows(m.daemons)))
 		return m, nil
 	case nodeDaemonsMsg:
 		m.err = nil
-		m.opErr = nil
 		m.loading = false
 		m.nodeDaemons = msg.daemons
 		m.nodeTable.SetRows(m.filter.apply(nodeDaemonRows(m.nodeDaemons)))
@@ -261,10 +258,10 @@ func (m serviceModel) Update(msg tea.Msg) (serviceModel, tea.Cmd) {
 		return m, nil
 	case opResultMsg:
 		if msg.err != nil {
-			m.opErr = msg.err
+			m.msg.setError(msg.err)
 			return m, nil
 		}
-		m.opErr = nil
+		m.msg.clear()
 		m.loading = true
 		return m, m.refresh()
 	case tea.KeyMsg:
@@ -410,18 +407,13 @@ func (m serviceModel) pageView(width int) string {
 		return m.nodeInventoryView()
 	}
 
-	prefix := ""
-	if m.opErr != nil {
-		prefix = styles.Danger.Render("operation failed: "+m.opErr.Error()) + "\n\n"
-	}
+	prefix := m.msg.banner()
 	haveData := len(m.services) > 0 || len(m.daemons) > 0
 	if m.err != nil && !haveData {
 		return prefix + styles.Danger.Render("Error: ") + m.err.Error() +
 			styles.Faint.Render("\n\n(is the cephadm orchestrator enabled?)")
 	}
-	if m.err != nil {
-		prefix += staleBanner(m.err) + "\n\n"
-	}
+	prefix += staleLine(m.err)
 
 	if m.level == svcLevelDaemons {
 		if m.loading && m.daemons == nil {
