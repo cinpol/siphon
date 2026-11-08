@@ -267,6 +267,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // handleKey routes key presses: the command prompt first (when open), then
 // global bindings, then the active view.
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// A keypress dismisses the active view's message line — unless it is typed
+	// into an open form, dialog or filter, so a refusal stays visible while the
+	// operator corrects the input. Every view behaves the same (see viewMessage).
+	if v := m.activeView(); v != nil && !v.capturing() {
+		v.clearMessage()
+	}
+
 	if m.cmdActive {
 		switch msg.String() {
 		case "enter":
@@ -361,6 +368,11 @@ type resourceView interface {
 	// key column can offer it only where it applies (every flat table view, but
 	// not the CRUSH tree).
 	supportsFilter() bool
+
+	// clearMessage dismisses the view's message line (an operation error or a
+	// notice). Model.handleKey calls it on every keypress that isn't typed into
+	// an open form, dialog or filter (see viewMessage).
+	clearMessage()
 }
 
 // activeView returns the sub-model for the current view, or nil for the

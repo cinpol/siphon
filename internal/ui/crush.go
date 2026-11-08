@@ -113,8 +113,7 @@ type crushModel struct {
 	promptErr  bool
 	confirm    components.Confirm
 	pendingOp  service.Operation
-	opErr      error
-	notice     string
+	msg        viewMessage
 
 	err     error
 	loading bool
@@ -190,7 +189,6 @@ func (m crushModel) Update(msg tea.Msg) (crushModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case crushMsg:
 		m.err = nil
-		m.opErr = nil // a fresh, successful load clears any stale op error
 		m.loading = false
 		m.build(msg.nodes)
 		return m, nil
@@ -203,10 +201,10 @@ func (m crushModel) Update(msg tea.Msg) (crushModel, tea.Cmd) {
 		return m, nil
 	case opResultMsg:
 		if msg.err != nil {
-			m.opErr = msg.err
+			m.msg.setError(msg.err)
 			return m, nil
 		}
-		m.opErr = nil
+		m.msg.clear()
 		m.loading = true
 		return m, m.fetchTree()
 	case tea.KeyMsg:
@@ -286,19 +284,19 @@ func (m crushModel) startMove() (crushModel, tea.Cmd) {
 		return m, nil
 	}
 	if node.Type == "root" {
-		m.notice = "root buckets cannot be moved"
+		m.msg.setNotice("root buckets cannot be moved")
 		return m, nil
 	}
 	dests := m.validDestinations(node)
 	if len(dests) == 0 {
-		m.notice = "no valid destination for this node"
+		m.msg.setNotice("no valid destination for this node")
 		return m, nil
 	}
 	m.pickerNode = node
 	m.picker = dests
 	m.pickerAt = 0
 	m.mode = crushPick
-	m.notice = ""
+	m.msg.clear()
 	return m, nil
 }
 
@@ -308,7 +306,7 @@ func (m crushModel) startCreate() (crushModel, tea.Cmd) {
 		components.ChoiceField("Type", bucketTypes, 0),
 	)
 	m.mode = crushForm
-	m.notice = ""
+	m.msg.clear()
 	return m, textinput.Blink
 }
 
@@ -320,17 +318,17 @@ func (m crushModel) startPrompt(kind crushPromptKind) (crushModel, tea.Cmd) {
 	switch kind {
 	case promptRename:
 		if node.IsOSD() {
-			m.notice = "only buckets can be renamed"
+			m.msg.setNotice("only buckets can be renamed")
 			return m, nil
 		}
 	case promptClass:
 		if !node.IsOSD() {
-			m.notice = "device class applies to OSDs only"
+			m.msg.setNotice("device class applies to OSDs only")
 			return m, nil
 		}
 	case promptReweight:
 		if node.Type == "root" {
-			m.notice = "root buckets cannot be reweighted"
+			m.msg.setNotice("root buckets cannot be reweighted")
 			return m, nil
 		}
 	}
@@ -352,7 +350,7 @@ func (m crushModel) startPrompt(kind crushPromptKind) (crushModel, tea.Cmd) {
 	m.promptNode = node
 	m.promptErr = false
 	m.mode = crushPrompt
-	m.notice = ""
+	m.msg.clear()
 	return m, textinput.Blink
 }
 
@@ -362,11 +360,11 @@ func (m crushModel) startDelete() (crushModel, tea.Cmd) {
 		return m, nil
 	}
 	if node.IsOSD() {
-		m.notice = "remove OSDs from the OSD view, not the tree"
+		m.msg.setNotice("remove OSDs from the OSD view, not the tree")
 		return m, nil
 	}
 	if node.Type == "root" {
-		m.notice = "root buckets cannot be deleted"
+		m.msg.setNotice("root buckets cannot be deleted")
 		return m, nil
 	}
 	return m.startConfirm(m.svc.CrushRemoveBucket(node.Name))
@@ -401,7 +399,7 @@ func (m crushModel) handleFormKey(msg tea.KeyMsg) (crushModel, tea.Cmd) {
 		name := m.form.Value(0)
 		if name == "" {
 			m.form = m.form.Reactivate()
-			m.notice = "bucket name is required"
+			m.msg.setNotice("bucket name is required")
 			return m, nil
 		}
 		return m.startConfirm(m.svc.CrushCreateBucket(name, m.form.Value(1)))
@@ -469,7 +467,7 @@ func (m crushModel) startConfirm(op service.Operation) (crushModel, tea.Cmd) {
 	m.pendingOp = op
 	m.confirm = components.NewYesNo(op.Title, op.Command, op.Consequence, op.Irreversible)
 	m.mode = crushConfirm
-	m.notice = ""
+	m.msg.clear()
 	return m, nil
 }
 
@@ -685,25 +683,17 @@ func (m crushModel) View(width, height int) string {
 
 // treeView renders the CRUSH hierarchy (the background behind any dialog).
 func (m crushModel) treeView(width, height int) string {
+	prefix := m.msg.banner()
 	if m.err != nil && len(m.visible) == 0 {
-		return errorScreen(m.err)
+		return prefix + errorScreen(m.err)
 	}
 	switch {
 	case m.loading && len(m.visible) == 0:
-		return styles.Faint.Render("Loading CRUSH tree…")
+		return prefix + styles.Faint.Render("Loading CRUSH tree…")
 	case len(m.visible) == 0:
-		return styles.Faint.Render("Empty CRUSH tree.")
+		return prefix + styles.Faint.Render("Empty CRUSH tree.")
 	}
-
-	prefix := ""
-	switch {
-	case m.err != nil:
-		prefix = staleBanner(m.err) + "\n\n"
-	case m.opErr != nil:
-		prefix = styles.Danger.Render("operation failed: "+m.opErr.Error()) + "\n\n"
-	case m.notice != "":
-		prefix = styles.Faint.Render(m.notice) + "\n\n"
-	}
+	prefix += staleLine(m.err)
 
 	rows := height - strings.Count(prefix, "\n")
 	if rows < 1 {

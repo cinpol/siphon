@@ -50,7 +50,7 @@ type flagModel struct {
 	confirm    components.Confirm
 	filter     tableFilter
 	pendingOp  service.Operation
-	opErr      error
+	msg        viewMessage
 
 	width  int
 	height int
@@ -116,7 +116,6 @@ func (m flagModel) Update(msg tea.Msg) (flagModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case flagsMsg:
 		m.err = nil
-		m.opErr = nil // a fresh, successful load clears any stale op error
 		m.loading = false
 		m.set = map[string]bool{}
 		for _, f := range msg.set {
@@ -130,10 +129,10 @@ func (m flagModel) Update(msg tea.Msg) (flagModel, tea.Cmd) {
 		return m, nil
 	case opResultMsg:
 		if msg.err != nil {
-			m.opErr = msg.err
+			m.msg.setError(msg.err)
 			return m, nil
 		}
-		m.opErr = nil
+		m.msg.clear()
 		m.loading = true
 		return m, m.fetch()
 	case tea.KeyMsg:
@@ -240,13 +239,8 @@ func (m flagModel) View(width, height int) string {
 }
 
 func (m flagModel) pageView(width int) string {
-	prefix := ""
-	if m.opErr != nil {
-		prefix = styles.Danger.Render("operation failed: "+m.opErr.Error()) + "\n\n"
-	}
-	if m.err != nil {
-		prefix += staleBanner(m.err) + "\n\n"
-	}
+	prefix := m.msg.banner()
+	prefix += staleLine(m.err)
 	if len(m.catalogue) == 0 {
 		return prefix + styles.Faint.Render("Loading flags…")
 	}
